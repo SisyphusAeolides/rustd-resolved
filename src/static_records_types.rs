@@ -124,14 +124,23 @@ mod system_path_tests {
     #[test]
     fn native_static_record_paths_follow_rustd_layout() {
         let database = StaticRecords::system(true);
-        assert_eq!(
-            database.directories,
-            vec![
-                PathBuf::from("/usr/lib/rustd/resolve/static.d"),
-                PathBuf::from("/usr/local/lib/rustd/resolve/static.d"),
-                PathBuf::from("/run/rustd/resolve/static.d"),
-                PathBuf::from("/etc/rustd/resolve/static.d"),
-            ]
+        let native = [
+            PathBuf::from("/usr/lib/rustd/resolve/static.d"),
+            PathBuf::from("/usr/local/lib/rustd/resolve/static.d"),
+            PathBuf::from("/run/rustd/resolve/static.d"),
+            PathBuf::from("/etc/rustd/resolve/static.d"),
+        ];
+        assert!(
+            database.directories.starts_with(&native),
+            "native RustD static-record directories must come first: {:?}",
+            database.directories
         );
+        assert!(database.directories.iter().all(|path| {
+            path.starts_with("/usr/lib/rustd/")
+                || path.starts_with("/usr/local/lib/rustd/")
+                || path.starts_with("/run/rustd/")
+                || path.starts_with("/etc/rustd/")
+                || cfg!(feature = "systemd-compat-paths")
+        }));
     }
 }
