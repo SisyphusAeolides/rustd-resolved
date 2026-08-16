@@ -1,0 +1,12 @@
+[Unit]
+Description=RustD Resolver Varlink Socket
+Before=rustd-resolved.service
+
+[Socket]
+ListenStream=/run/rustd/resolve/io.rustd.Resolve
+FileDescriptorName=varlink
+SocketMode=0666
+Service=rustd-resolved.service
+
+[Install]
+WantedBy=sockets.target

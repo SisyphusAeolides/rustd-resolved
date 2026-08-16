@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "https://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- SPDX-License-Identifier: LGPL-2.1-or-later -->
+<policyconfig>
+  <vendor>rustd-resolved</vendor>
+  <vendor_url>https://github.com/SisyphusAeolides/rustd-resolved</vendor_url>
+
+  <action id="org.freedesktop.resolve1.register-service">
+    <description>Register a DNS-SD service</description>
+    <message>Authentication is required to register a DNS-SD service.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.owner">unix-user:systemd-resolve</annotate>
+  </action>
+  <action id="org.freedesktop.resolve1.unregister-service">
+    <description>Unregister a DNS-SD service</description>
+    <message>Authentication is required to unregister a DNS-SD service.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.owner">unix-user:systemd-resolve</annotate>
+  </action>
+  <action id="org.freedesktop.resolve1.set-dns-servers">
+    <description>Set DNS servers</description>
+    <message>Authentication is required to set DNS servers.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.owner">unix-user:systemd-resolve</annotate>
+  </action>
+  <action id="org.freedesktop.resolve1.set-domains">
+    <description>Set domains</description>
+    <message>Authentication is required to set domains.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.owner">unix-user:systemd-resolve</annotate>
+  </action>
+  <action id="org.freedesktop.resolve1.set-default-route">
+    <description>Set default route</description>
+    <message>Authentication is required to set default route.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.owner">unix-user:systemd-resolve</annotate>
+  </action>
+  <action id="org.freedesktop.resolve1.set-llmnr">
+    <description>Enable or disable LLMNR</description>
+    <message>Authentication is required to enable or disable LLMNR.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.owner">unix-user:systemd-resolve</annotate>
+  </action>
+  <action id="org.freedesktop.resolve1.set-mdns">
+    <description>Enable or disable multicast DNS</description>
+    <message>Authentication is required to enable or disable multicast DNS.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.owner">unix-user:systemd-resolve</annotate>
+  </action>
+  <action id="org.freedesktop.resolve1.set-dns-over-tls">
+    <description>Enable or disable DNS over TLS</description>
+    <message>Authentication is required to enable or disable DNS over TLS.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.owner">unix-user:systemd-resolve</annotate>
+  </action>
+  <action id="org.freedesktop.resolve1.set-dnssec">
+    <description>Enable or disable DNSSEC</description>
+    <message>Authentication is required to enable or disable DNSSEC.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.owner">unix-user:systemd-resolve</annotate>
+  </action>
+  <action id="org.freedesktop.resolve1.set-dnssec-negative-trust-anchors">
+    <description>Set DNSSEC negative trust anchors</description>
+    <message>Authentication is required to set DNSSEC negative trust anchors.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.owner">unix-user:systemd-resolve</annotate>
+  </action>
+  <action id="org.freedesktop.resolve1.revert">
+    <description>Revert name resolution settings</description>
+    <message>Authentication is required to reset name resolution settings.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.owner">unix-user:systemd-resolve</annotate>
+  </action>
+  <action id="org.freedesktop.resolve1.subscribe-query-results">
+    <description>Subscribe to query results</description>
+    <message>Authentication is required to subscribe to query results.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.owner">unix-user:systemd-resolve</annotate>
+  </action>
+  <action id="org.freedesktop.resolve1.subscribe-dns-configuration">
+    <description>Subscribe to DNS configuration</description>
+    <message>Authentication is required to subscribe to DNS configuration.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.owner">unix-user:systemd-resolve</annotate>
+  </action>
+  <action id="org.freedesktop.resolve1.dump-cache">
+    <description>Dump the DNS cache</description>
+    <message>Authentication is required to dump the DNS cache.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.owner">unix-user:systemd-resolve</annotate>
+  </action>
+  <action id="org.freedesktop.resolve1.dump-server-state">
+    <description>Dump DNS server state</description>
+    <message>Authentication is required to dump DNS server state.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.owner">unix-user:systemd-resolve</annotate>
+  </action>
+  <action id="org.freedesktop.resolve1.dump-statistics">
+    <description>Dump resolver statistics</description>
+    <message>Authentication is required to dump resolver statistics.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.owner">unix-user:systemd-resolve</annotate>
+  </action>
+  <action id="org.freedesktop.resolve1.reset-statistics">
+    <description>Reset resolver statistics</description>
+    <message>Authentication is required to reset resolver statistics.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.owner">unix-user:systemd-resolve</annotate>
+  </action>
+  <action id="org.freedesktop.resolve1.flush-caches">
+    <description>Flush DNS caches</description>
+    <message>Authentication is required to flush DNS caches.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.owner">unix-user:systemd-resolve</annotate>
+  </action>
+  <action id="org.freedesktop.resolve1.reset-server-features">
+    <description>Reset DNS server features</description>
+    <message>Authentication is required to reset DNS server features.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.owner">unix-user:systemd-resolve</annotate>
+  </action>
+</policyconfig>

@@ -1,0 +1,14 @@
+org.freedesktop.resolve1.NoNameServers
+org.freedesktop.resolve1.InvalidReply
+org.freedesktop.resolve1.NoSuchRR
+org.freedesktop.resolve1.CNameLoop
+org.freedesktop.resolve1.Aborted
+org.freedesktop.resolve1.NoSuchService
+org.freedesktop.resolve1.DnssecFailed
+org.freedesktop.resolve1.NoTrustAnchor
+org.freedesktop.resolve1.ResourceRecordTypeUnsupported
+org.freedesktop.resolve1.NoSuchLink
+org.freedesktop.resolve1.NoSuchDelegate
+org.freedesktop.resolve1.LinkBusy
+org.freedesktop.resolve1.NetworkDown
+org.freedesktop.resolve1.DnsError.*

@@ -1,0 +1,94 @@
+name: RustD resolver D-Bus isolation hardening
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rustd-resolved-dbus-isolation-hardening
+  cancel-in-progress: false
+
+jobs:
+  harden:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Install validation dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends dbus gfortran libssl-dev liburing-dev openssl python3 python3-dbus python3-gi python3-yaml
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup toolchain install 1.74.0 --profile minimal --component clippy
+
+      - name: Harden optional D-Bus bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/harden-dbus-bridge.py
+          cargo +stable fmt --all
+          git diff --check
+
+      - name: Check native ABI packaging and NSS
+        shell: bash
+        run: |
+          set -euo pipefail
+          make check-native
+          make check-packaging
+          make check-nss
+
+      - name: Check stable Rust
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +stable clippy --all-targets --all-features --locked -- \
+            -D clippy::correctness -D clippy::suspicious -D clippy::perf
+          cargo +stable test --all-targets --all-features --locked
+
+      - name: Check Rust 1.74
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +1.74.0 clippy --all-targets --all-features --locked -- \
+            -D clippy::correctness -D clippy::suspicious -D clippy::perf
+
+      - name: Build release
+        run: cargo +stable build --release --locked
+
+      - name: Check live native DNS and Varlink
+        run: python3 tests/live-dns.py target/release/rustd-resolved target/release/rustd-resolvectl
+
+      - name: Check D-Bus outage isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! getent passwd rustd-resolve >/dev/null; then
+            sudo useradd --system --no-create-home --shell /usr/sbin/nologin rustd-resolve
+          fi
+          sudo python3 tests/live-dbus-isolation.py target/release/rustd-resolved target/release/rustd-resolvectl
+
+      - name: Check live D-Bus contracts
+        run: bash tests/dbus-introspection.sh target/release/rustd-resolved target/release/rustd-resolvectl
+
+      - name: Commit hardened bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/dbus-isolation-hardening.yml
+          rm scripts/harden-dbus-bridge.py
+          git diff --check
+          git config user.name "Kenny Glowner"
+          git config user.email "SisyphusAeolides@pm.me"
+          git add -A
+          git commit -m "fix: isolate optional D-Bus bridge"
+          git push origin HEAD:main

@@ -1,0 +1,8 @@
+<node>
+  <interface name="org.freedesktop.resolve1.DnsDelegate">
+    <property name="DNS" type="a(iiayqs)" access="read"><annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="false"/></property>
+    <property name="CurrentDNSServer" type="(iiayqs)" access="read"><annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="false"/></property>
+    <property name="Domains" type="a(sb)" access="read"><annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="false"/></property>
+    <property name="DefaultRoute" type="b" access="read"><annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="false"/></property>
+  </interface>
+</node>

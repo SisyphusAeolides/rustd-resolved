@@ -1,0 +1,14 @@
+[Unit]
+Description=RustD Network Name Resolver
+After=rustd-sysusers.service network-pre.target
+Before=network.target nss-lookup.target
+Wants=nss-lookup.target
+
+[Service]
+Type=notify
+ExecStart=/usr/lib/rustd/rustd-resolved
+Restart=always
+RestartSec=1s
+
+[Install]
+WantedBy=sysinit.target

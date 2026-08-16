@@ -1,0 +1,387 @@
+//! Atomic publisher for RustD resolver `resolv.conf` files.
+//!
+//! Installed runtime paths:
+//!   /run/rustd/resolve/stub-resolv.conf  — nameserver 127.0.0.53[.54]
+//!   /run/rustd/resolve/resolv.conf       — current uplink servers
+//!
+//! Optional per-link snapshots are published under `netif/` for diagnostics.
+
+use std::fs::{self, Metadata, OpenOptions};
+use std::io::{self, Write};
+use std::net::IpAddr;
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use tracing::{debug, warn};
+
+const SYSTEM_RESOLV_CONF: &str = "/etc/resolv.conf";
+const STATIC_RESOLV_CONF_PATHS: [&str; 2] =
+    ["/usr/lib/systemd/resolv.conf", "/lib/systemd/resolv.conf"];
+const DEFAULT_RUN_DIR: &str = "/run/rustd/resolve";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ResolvConfMode {
+    Uplink,
+    #[default]
+    Stub,
+    Static,
+    Missing,
+    Foreign,
+}
+
+impl ResolvConfMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Uplink => "uplink",
+            Self::Stub => "stub",
+            Self::Static => "static",
+            Self::Missing => "missing",
+            Self::Foreign => "foreign",
+        }
+    }
+}
+
+pub fn detect_resolv_conf_mode(
+    system_path: &Path,
+    run_dir: &Path,
+    static_paths: &[&Path],
+) -> io::Result<ResolvConfMode> {
+    let system_metadata = match fs::metadata(system_path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return Ok(ResolvConfMode::Missing);
+        }
+        Err(error) => return Err(error),
+    };
+
+    for (mode, path) in [
+        (ResolvConfMode::Uplink, run_dir.join("resolv.conf")),
+        (ResolvConfMode::Stub, run_dir.join("stub-resolv.conf")),
+    ] {
+        if path_matches(&system_metadata, &path)? {
+            return Ok(mode);
+        }
+    }
+
+    for path in static_paths {
+        if path_matches(&system_metadata, path)? {
+            return Ok(ResolvConfMode::Static);
+        }
+    }
+
+    Ok(ResolvConfMode::Foreign)
+}
+
+pub fn system_resolv_conf_mode(run_dir: &Path) -> io::Result<ResolvConfMode> {
+    let static_paths = STATIC_RESOLV_CONF_PATHS.map(Path::new);
+    detect_resolv_conf_mode(Path::new(SYSTEM_RESOLV_CONF), run_dir, &static_paths)
+}
+
+fn path_matches(system_metadata: &Metadata, candidate: &Path) -> io::Result<bool> {
+    match fs::metadata(candidate) {
+        Ok(candidate_metadata) => Ok(same_inode(system_metadata, &candidate_metadata)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
+fn same_inode(left: &Metadata, right: &Metadata) -> bool {
+    left.dev() == right.dev() && left.ino() == right.ino()
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct GlobalDnsState {
+    pub search: Vec<String>,
+    pub uplink_servers: Vec<IpAddr>,
+    pub options: Vec<String>,
+    pub banner: Option<String>,
+    pub llmnr_hostname: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ResolvConfPublisher {
+    pub run_dir: PathBuf,
+    pub mode: ResolvConfMode,
+    pub stub_addresses: Vec<IpAddr>,
+    pub file_mode: u32,
+}
+
+impl Default for ResolvConfPublisher {
+    fn default() -> Self {
+        Self {
+            run_dir: PathBuf::from(DEFAULT_RUN_DIR),
+            mode: ResolvConfMode::Stub,
+            stub_addresses: vec![
+                IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 53)),
+                IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 54)),
+            ],
+            file_mode: 0o644,
+        }
+    }
+}
+
+impl ResolvConfPublisher {
+    pub fn with_run_dir(mut self, p: impl Into<PathBuf>) -> Self {
+        self.run_dir = p.into();
+        self
+    }
+
+    pub fn ensure_dirs(&self) -> io::Result<()> {
+        fs::create_dir_all(&self.run_dir)?;
+        fs::create_dir_all(self.run_dir.join("netif"))?;
+        Ok(())
+    }
+
+    fn atomic_write(&self, path: &Path, body: &str) -> io::Result<()> {
+        let parent = path.parent().unwrap_or_else(|| Path::new("."));
+        fs::create_dir_all(parent)?;
+        let tmp = path.with_extension(format!(
+            "tmp.{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        {
+            let mut opts = OpenOptions::new();
+            opts.write(true).create(true).truncate(true);
+            #[cfg(unix)]
+            opts.mode(self.file_mode);
+            let mut file = opts.open(&tmp)?;
+            file.write_all(body.as_bytes())?;
+            file.sync_all()?;
+        }
+        fs::rename(&tmp, path)?;
+        debug!(path = %path.display(), bytes = body.len(), "resolv.conf written");
+        Ok(())
+    }
+
+    fn header(state: &GlobalDnsState, path: &Path) -> String {
+        let mut header = format!(
+            "# This is {} managed by rustd-resolved.\n# Do not edit this file manually.\n",
+            path.display()
+        );
+        if let Some(banner) = &state.banner {
+            header.push_str("# ");
+            header.push_str(banner);
+            header.push('\n');
+        }
+        header.push('\n');
+        header
+    }
+
+    fn render_search(state: &GlobalDnsState) -> String {
+        if state.search.is_empty() {
+            return String::new();
+        }
+        let mut cleaned: Vec<String> = state
+            .search
+            .iter()
+            .map(|s| s.trim().trim_end_matches('.').to_ascii_lowercase())
+            .filter(|s| !s.is_empty() && s != ".")
+            .collect();
+        cleaned.dedup();
+        if cleaned.is_empty() {
+            return String::new();
+        }
+        format!("search {}\n", cleaned.join(" "))
+    }
+
+    fn render_options(state: &GlobalDnsState) -> String {
+        let opts = if state.options.is_empty() {
+            vec!["edns0".to_string(), "trust-ad".to_string()]
+        } else {
+            state.options.clone()
+        };
+        format!("options {}\n", opts.join(" "))
+    }
+
+    pub fn write_stub(&self, state: &GlobalDnsState) -> io::Result<()> {
+        let path = self.run_dir.join("stub-resolv.conf");
+        let mut body = Self::header(state, &path);
+        body.push_str(
+            "# Run \"rustd-resolvectl status\" to see details about the uplink DNS servers\n\
+             # currently in use.\n\n",
+        );
+        for address in &self.stub_addresses {
+            body.push_str(&format!("nameserver {address}\n"));
+        }
+        body.push_str(&Self::render_search(state));
+        body.push_str(&Self::render_options(state));
+        self.atomic_write(&path, &body)
+    }
+
+    pub fn write_uplink(&self, state: &GlobalDnsState) -> io::Result<()> {
+        let path = self.run_dir.join("resolv.conf");
+        let mut body = Self::header(state, &path);
+        body.push_str(
+            "# This file lists the uplink DNS servers discovered by rustd-resolved.\n\
+             # Applications that cannot use the stub may point at this file.\n\n",
+        );
+        if state.uplink_servers.is_empty() {
+            body.push_str("# No uplink DNS servers are currently known.\n");
+        } else {
+            for server in &state.uplink_servers {
+                body.push_str(&format!("nameserver {server}\n"));
+            }
+        }
+        body.push_str(&Self::render_search(state));
+        let opts: Vec<String> = state
+            .options
+            .iter()
+            .filter(|option| option.as_str() != "trust-ad")
+            .cloned()
+            .collect();
+        if opts.is_empty() {
+            body.push_str("options edns0\n");
+        } else {
+            body.push_str(&format!("options {}\n", opts.join(" ")));
+        }
+        self.atomic_write(&path, &body)
+    }
+
+    pub fn write_link_snapshot(
+        &self,
+        ifindex: i32,
+        ifname: &str,
+        dns: &[IpAddr],
+        domains: &[String],
+    ) -> io::Result<()> {
+        let dir = self.run_dir.join("netif");
+        fs::create_dir_all(&dir)?;
+        let path = dir.join(format!("{ifindex}"));
+        let mut body = format!("# link {ifindex} ({ifname})\n");
+        for address in dns {
+            body.push_str(&format!("DNS={address}\n"));
+        }
+        for domain in domains {
+            body.push_str(&format!("Domains={domain}\n"));
+        }
+        self.atomic_write(&path, &body)
+    }
+
+    pub fn remove_link_snapshot(&self, ifindex: i32) -> io::Result<()> {
+        let path = self.run_dir.join("netif").join(format!("{ifindex}"));
+        match fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub fn republish(&self, state: &GlobalDnsState) -> io::Result<()> {
+        self.ensure_dirs()?;
+        self.write_stub(state)?;
+        self.write_uplink(state)?;
+        Ok(())
+    }
+
+    pub fn republish_lossy(&self, state: &GlobalDnsState) {
+        if let Err(error) = self.republish(state) {
+            warn!(error = %error, "failed to publish resolv.conf files");
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::Ipv4Addr;
+    use std::os::unix::fs::symlink;
+
+    #[test]
+    fn default_runtime_directory_is_native_rustd() {
+        assert_eq!(
+            ResolvConfPublisher::default().run_dir,
+            PathBuf::from("/run/rustd/resolve")
+        );
+    }
+
+    #[test]
+    fn stub_contains_local_nameservers() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = ResolvConfPublisher::default().with_run_dir(dir.path());
+        let state = GlobalDnsState {
+            search: vec!["lan".into(), "lan".into(), "".into()],
+            uplink_servers: vec![IpAddr::V4(Ipv4Addr::new(9, 9, 9, 9))],
+            options: vec![],
+            banner: Some("test".into()),
+            llmnr_hostname: None,
+        };
+        p.republish(&state).unwrap();
+        let stub = fs::read_to_string(dir.path().join("stub-resolv.conf")).unwrap();
+        assert!(stub.contains("127.0.0.53"));
+        assert!(stub.contains("search lan\n"));
+        assert!(stub.contains("trust-ad"));
+        assert!(stub.contains("rustd-resolvectl status"));
+        assert!(!stub.contains("/run/systemd/resolve"));
+        let up = fs::read_to_string(dir.path().join("resolv.conf")).unwrap();
+        assert!(up.contains("9.9.9.9"));
+        assert!(!up.contains("trust-ad"));
+        assert!(!up.contains("/run/systemd/resolve"));
+    }
+
+    #[test]
+    fn detects_all_upstream_resolv_conf_modes_by_inode() {
+        let root = tempfile::tempdir().unwrap();
+        let run_dir = root.path().join("run");
+        let static_dir = root.path().join("lib");
+        fs::create_dir_all(&run_dir).unwrap();
+        fs::create_dir_all(&static_dir).unwrap();
+
+        let uplink = run_dir.join("resolv.conf");
+        let stub = run_dir.join("stub-resolv.conf");
+        let static_file = static_dir.join("resolv.conf");
+        let foreign = root.path().join("foreign.conf");
+        fs::write(&uplink, "nameserver 192.0.2.1\n").unwrap();
+        fs::write(&stub, "nameserver 127.0.0.53\n").unwrap();
+        fs::write(&static_file, "nameserver 127.0.0.53\n").unwrap();
+        fs::write(&foreign, "nameserver 198.51.100.1\n").unwrap();
+
+        let system = root.path().join("etc-resolv.conf");
+        let static_paths = [static_file.as_path()];
+        assert_eq!(
+            detect_resolv_conf_mode(&system, &run_dir, &static_paths).unwrap(),
+            ResolvConfMode::Missing
+        );
+
+        symlink(&uplink, &system).unwrap();
+        assert_eq!(
+            detect_resolv_conf_mode(&system, &run_dir, &static_paths).unwrap(),
+            ResolvConfMode::Uplink
+        );
+
+        fs::remove_file(&system).unwrap();
+        symlink(&stub, &system).unwrap();
+        assert_eq!(
+            detect_resolv_conf_mode(&system, &run_dir, &static_paths).unwrap(),
+            ResolvConfMode::Stub
+        );
+
+        fs::remove_file(&system).unwrap();
+        symlink(&static_file, &system).unwrap();
+        assert_eq!(
+            detect_resolv_conf_mode(&system, &run_dir, &static_paths).unwrap(),
+            ResolvConfMode::Static
+        );
+
+        fs::remove_file(&system).unwrap();
+        symlink(&foreign, &system).unwrap();
+        assert_eq!(
+            detect_resolv_conf_mode(&system, &run_dir, &static_paths).unwrap(),
+            ResolvConfMode::Foreign
+        );
+    }
+
+    #[test]
+    fn dangling_resolv_conf_symlink_is_missing() {
+        let root = tempfile::tempdir().unwrap();
+        let system = root.path().join("resolv.conf");
+        symlink(root.path().join("absent"), &system).unwrap();
+        assert_eq!(
+            detect_resolv_conf_mode(&system, root.path(), &[]).unwrap(),
+            ResolvConfMode::Missing
+        );
+    }
+}

@@ -1,0 +1,85 @@
+name: Fuzz smoke
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: fuzz-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    name: Fuzz DNS and Varlink boundaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Publish pending status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          payload=$(printf '{"state":"pending","context":"rustd-resolved/fuzz","description":"Fuzz smoke verification is running","target_url":"%s"}' "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "$payload" >/dev/null
+
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install native build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends gfortran libssl-dev liburing-dev
+
+      - name: Install pinned fuzz toolchain
+        run: |
+          set -euo pipefail
+          rustup toolchain install nightly-2025-04-01 --profile minimal
+          cargo +nightly-2025-04-01 install cargo-fuzz --version 0.12.0 --locked
+
+      - name: Fuzz DNS packet parser
+        run: cargo +nightly-2025-04-01 fuzz run dns_packet -- -max_total_time=30 -timeout=5 -rss_limit_mb=1024
+
+      - name: Fuzz DNS record parser
+        run: cargo +nightly-2025-04-01 fuzz run dns_records -- -max_total_time=30 -timeout=5 -rss_limit_mb=1024
+
+      - name: Fuzz Varlink request parser
+        run: cargo +nightly-2025-04-01 fuzz run varlink_request -- -max_total_time=30 -timeout=5 -rss_limit_mb=1024
+
+      - name: Upload fuzz artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: rustd-resolved-fuzz-${{ github.sha }}
+          path: fuzz/artifacts
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Publish final status
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATE: ${{ job.status == 'success' && 'success' || 'failure' }}
+        run: |
+          set -euo pipefail
+          payload=$(printf '{"state":"%s","context":"rustd-resolved/fuzz","description":"Fuzz smoke verification %s","target_url":"%s"}' "$STATE" "$STATE" "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "$payload" >/dev/null

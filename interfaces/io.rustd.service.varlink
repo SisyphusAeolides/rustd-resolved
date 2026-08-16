@@ -1,0 +1,26 @@
+# An interface to control basic properties of RustD services.
+interface io.rustd.service
+
+# Checks if the service is running.
+method Ping() -> ()
+
+# Reloads configuration files.
+method Reload(
+	# Controls whether interactive authentication (via polkit) shall be allowed. If unspecified defaults to false.
+	allowInteractiveAuthentication: ?bool
+) -> ()
+
+# Sets the maximum log level.
+method SetLogLevel(
+	# The maximum log level, using BSD syslog log level integers.
+	level: ?int
+) -> ()
+
+# Get current environment block.
+method GetEnvironment() -> (
+	# Returns the current environment block, i.e. the contents of environ[].
+	environment: ?[]string
+)
+
+# Returned if the environment block is currently not in a valid state.
+error InconsistentEnvironment()

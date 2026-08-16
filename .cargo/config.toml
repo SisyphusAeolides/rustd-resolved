@@ -1,0 +1,13 @@
+# Workaround for rustix 0.37.28 nightly breakage:
+# Newer nightly toolchains reject `rustc_layout_scalar_valid_range_*` attributes
+# even behind `cfg_attr(rustc_attrs, ...)`. Forcing the libc backend avoids the
+# linux_raw code that uses those attributes, keeping the build green on both
+# pinned 1.74 and newer nightlies without changing Cargo.lock.
+[build]
+rustflags = ["--cfg", "rustix_use_libc"]
+
+# Pin to locked dependencies by default (mirrors `cargo --locked` hygiene).
+[alias]
+b = "build --locked"
+c = "check --locked"
+t = "test --locked"

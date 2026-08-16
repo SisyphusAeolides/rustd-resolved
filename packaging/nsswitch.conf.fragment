@@ -1,0 +1,4 @@
+# Merge into /etc/nsswitch.conf hosts: line (do not wipe vendor file blindly)
+# Recommended (Fedora/RHEL style):
+# hosts: files myhostname mdns4_minimal [NOTFOUND=return] resolve [!UNAVAIL=return] dns
+hosts: files myhostname resolve [!UNAVAIL=return] dns

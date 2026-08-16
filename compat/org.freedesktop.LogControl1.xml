@@ -1,0 +1,8 @@
+<!-- SPDX-License-Identifier: LGPL-2.1-or-later -->
+<node name="/org/freedesktop/LogControl1">
+  <interface name="org.freedesktop.LogControl1">
+    <property name="LogLevel" type="s" access="readwrite"/>
+    <property name="LogTarget" type="s" access="readwrite"/>
+    <property name="SyslogIdentifier" type="s" access="read"/>
+  </interface>
+</node>

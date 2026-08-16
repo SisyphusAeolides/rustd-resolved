@@ -1,0 +1,15 @@
+Source: rustd-resolved
+Section: net
+Priority: optional
+Maintainer: Kenny Glowner <sisyphusaeolides@users.noreply.github.com>
+Build-Depends: debhelper-compat (= 13), cargo, rustc, pkg-config, libsystemd-dev
+Standards-Version: 4.6.0
+Homepage: https://github.com/SisyphusAeolides/rustd-resolved
+
+Package: rustd-resolved
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, systemd
+Conflicts: systemd-resolved
+Provides: systemd-resolved
+Description: Rust reimplementation of systemd-resolved
+ rustd-resolved is a Rust drop-in replacement for systemd-resolved.

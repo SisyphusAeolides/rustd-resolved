@@ -1,0 +1,47 @@
+name: Live RustD mDNS verification
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-rustd-mdns-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install build and network tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            gfortran iproute2 libssl-dev liburing-dev
+
+      - name: Build native daemon and client
+        run: cargo build --release --locked --bin rustd-resolved --bin rustd-resolvectl
+
+      - name: Exercise real multicast metadata and anti-spoofing
+        shell: bash
+        run: python3 tests/live-mdns.py target/release/rustd-resolved
+
+      - name: Install external Avahi interoperability tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get install --yes --no-install-recommends avahi-daemon avahi-utils dbus
+
+      - name: Exercise external Avahi mDNS and DNS-SD interoperability
+        shell: bash
+        run: timeout --kill-after=5s 240s bash tests/live-avahi-interop.sh target/release/rustd-resolved target/release/rustd-resolvectl

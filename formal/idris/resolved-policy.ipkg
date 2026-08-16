@@ -1,0 +1,6 @@
+package resolved-policy
+version = 0.1.0
+authors = "SisyphusAeolides"
+license = "LGPL-2.1-or-later"
+sourcedir = "src"
+modules = Resolved.Policy, Resolved.Transaction

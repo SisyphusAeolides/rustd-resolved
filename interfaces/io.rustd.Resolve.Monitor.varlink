@@ -1,0 +1,29 @@
+interface io.rustd.Resolve.Monitor
+
+type DNSProtocol (dns, mdns, llmnr)
+type DNSOverTLSMode (no, yes, opportunistic)
+type ResolveSupport (no, yes, resolve)
+type ResolvConfMode (uplink, stub, static, missing, foreign)
+
+type ResourceKey (class: ?int, type: int, name: string)
+type ResourceRecord (key: ResourceKey, priority: ?int, weight: ?int, port: ?int, name: ?string, cpu: ?string, os: ?string, items: ?[]string, address: ?[]int, mname: ?string, rname: ?string, serial: ?int, refresh: ?int, expire: ?int, minimum: ?int, exchange: ?string, version: ?int, size: ?int, horiz_pre: ?int, vert_pre: ?int, latitude: ?int, longitude: ?int, altitude: ?int, keyTag: ?int, algorithm: ?int, digestType: ?int, digest: ?string, fptype: ?int, fingerprint: ?string, flags: ?int, protocol: ?int, dnskey: ?string, signer: ?string, typeCovered: ?int, labels: ?int, originalTtl: ?int, expiration: ?int, inception: ?int, signature: ?string, nextDomain: ?string, types: ?[]int, iterations: ?int, salt: ?string, hash: ?string, certUsage: ?int, selector: ?int, matchingType: ?int, data: ?string, tag: ?string, value: ?string, target: ?string, svcparams: ?object, order: ?int, preference: ?int, naptrFlags: ?string, services: ?string, regexp: ?string, replacement: ?string)
+type DNSServer (address: []int, addressString: ?string, family: int, port: int, ifindex: ?int, name: ?string, accessible: bool)
+type SearchDomain (name: string, routeOnly: bool, ifindex: ?int)
+type DNSScope (protocol: DNSProtocol, family: ?int, ifindex: ?int, ifname: ?string, dnssec: ?string, dnsOverTLS: ?DNSOverTLSMode)
+type DNSConfiguration (ifname: ?string, ifindex: ?int, delegate: ?string, defaultRoute: ?bool, currentServer: ?DNSServer, servers: ?[]DNSServer, fallbackServers: ?[]DNSServer, searchDomains: ?[]SearchDomain, negativeTrustAnchors: ?[]string, dnssec: ?string, dnssecSupported: ?bool, dnsOverTLS: ?DNSOverTLSMode, llmnr: ?string, mDNS: ?ResolveSupport, resolvConfMode: ?ResolvConfMode, scopes: ?[]DNSScope)
+
+type ResourceRecordArray (rr: ?ResourceRecord, raw: string)
+type Answer (rr: ?ResourceRecord, raw: string, ifindex: ?int)
+type CacheEntry (key: ResourceKey, rrs: ?[]ResourceRecordArray, type: ?string, until: int)
+type ScopeCache (protocol: DNSProtocol, family: ?int, ifindex: ?int, ifname: ?string, cache: []CacheEntry, dnssec: ?string, dnsOverTLS: ?DNSOverTLSMode)
+type ServerState (Server: string, Type: string, Interface: ?string, InterfaceIndex: ?int, VerifiedFeatureLevel: string, PossibleFeatureLevel: string, DNSSECMode: string, DNSSECSupported: bool, ReceivedUDPFragmentMax: int, FailedUDPAttempts: int, FailedTCPAttempts: int, PacketTruncated: bool, PacketBadOpt: bool, PacketRRSIGMissing: bool, PacketInvalid: bool, PacketDoOff: bool)
+type TransactionStatistics (currentTransactions: int, totalTransactions: int, totalTimeouts: int, totalTimeoutsServedStale: int, totalFailedResponses: int, totalFailedResponsesServedStale: int)
+type CacheStatistics (size: int, hits: int, misses: int)
+type DnssecStatistics (secure: int, insecure: int, bogus: int, indeterminate: int)
+
+method SubscribeQueryResults(allowInteractiveAuthentication: ?bool) -> (ready: ?bool, state: ?string, result: ?string, rcode: ?int, errno: ?int, extendedDNSErrorCode: ?int, extendedDNSErrorMessage: ?string, question: ?[]ResourceKey, collectedQuestions: ?[]ResourceKey, answer: ?[]Answer)
+method DumpCache(allowInteractiveAuthentication: ?bool) -> (dump: []ScopeCache)
+method DumpServerState(allowInteractiveAuthentication: ?bool) -> (dump: []ServerState)
+method DumpStatistics(allowInteractiveAuthentication: ?bool) -> (transactions: TransactionStatistics, cache: CacheStatistics, dnssec: DnssecStatistics)
+method ResetStatistics(allowInteractiveAuthentication: ?bool) -> ()
+method SubscribeDNSConfiguration(allowInteractiveAuthentication: ?bool) -> (configuration: []DNSConfiguration)

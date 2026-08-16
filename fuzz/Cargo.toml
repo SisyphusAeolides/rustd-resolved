@@ -1,0 +1,43 @@
+[package]
+name = "rustd-resolved-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.rustd_resolved]
+package = "rustd-resolved"
+path = ".."
+default-features = false
+
+[[bin]]
+name = "dns_packet"
+path = "fuzz_targets/dns_packet.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "dns_records"
+path = "fuzz_targets/dns_records.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "varlink_request"
+path = "fuzz_targets/varlink_request.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]
+
+[patch.crates-io]
+zbus_macros = { path = "../vendor/zbus_macros-3.15.2" }

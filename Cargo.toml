@@ -1,0 +1,93 @@
+[package]
+name = "rustd-resolved"
+version = "0.2.1"
+edition = "2021"
+rust-version = "1.74"
+license = "LGPL-2.1-or-later"
+description = "Native DNS resolver and name-service daemon for RustD"
+repository = "https://github.com/SisyphusAeolides/rustd-resolved"
+build = "build.rs"
+autobins = false
+
+[lib]
+name = "rustd_resolved"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rustd-resolved"
+path = "src/bin/rustd-resolved.rs"
+
+[[bin]]
+name = "rustd-resolvectl"
+path = "src/bin/rustd-resolvectl.rs"
+
+[dependencies]
+anyhow = "1"
+async-trait = "0.1"
+bincode = "1"
+bytes = "1"
+crossbeam-queue = "0.3.13"
+memmap2 = "0.9"
+parking_lot = "0.12"
+rand = "0.9.5"
+# The exact transitive pins below are part of the declared Rust 1.74 build
+# contract and must stay synchronized with Cargo.lock.
+# rand_core 0.9 accepts any getrandom 0.3 release. Newer getrandom releases
+# pull WASI packages whose manifests require a newer Cargo, so keep the
+# Rust 1.74-compatible branch explicit.
+getrandom = "=0.3.1"
+sd-notify = "0.4"
+serde = { version = "1", features = ["derive"] }
+socket2 = { version = "0.5", features = ["all"] }
+seahash = "4.1.0"
+sha1 = "0.10.7"
+thiserror = "1"
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7.19", optional = true }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+zbus = { version = "=3.15.2", default-features = false, features = ["async-io"] }
+idna = { version = "1", optional = true }
+# idna 1.1 accepts any idna_adapter 1.x. Version 1.2.2 uses the Rust 2024
+# edition, so retain the Rust 1.74-compatible adapter branch.
+idna_adapter = { version = "=1.1.0", optional = true }
+# toml_edit 0.19 accepts any indexmap 2.x. Newer indexmap releases depend on
+# edition-2024 hashbrown releases, so pin the Rust 1.74-compatible branch.
+indexmap = "=2.2.6"
+
+[features]
+default = ["fortran-routing", "idna-name"]
+fortran-routing = []
+hyper = ["dep:tokio-util"]
+beast-wire = []
+kalman = []
+formal-crosscheck = []
+mmap-nss = []
+dataplane = []
+swr = []
+nsec-agg = []
+sigcache = []
+doq = []
+obs = []
+supremacy = ["mmap-nss", "dataplane", "swr", "nsec-agg", "sigcache", "doq", "obs"]
+idna-name = ["dep:idna", "dep:idna_adapter"]
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+panic = "abort"
+strip = "symbols"
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+correctness = "deny"
+suspicious = "warn"
+perf = "warn"
+
+[dev-dependencies]
+tempfile = "=3.10.1"
+
+[patch.crates-io]
+zbus_macros = { path = "vendor/zbus_macros-3.15.2" }

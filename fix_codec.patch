@@ -1,0 +1,26 @@
+--- src/wire/codec.rs
++++ src/wire/codec.rs
+@@ -355,6 +355,7 @@
+         47 => validate_nsec(packet, start, end),
+         48 => require_minimum_rdata_length(record, 5),
+         50 => validate_nsec3(packet, start, end),
++        TYPE_NSEC3PARAM => validate_nsec3param(packet, start, end),
+         52 => require_minimum_rdata_length(record, 4),
+         64 | 65 => validate_svcb(packet, start, end),
+         257 => validate_caa(packet, start, end),
+@@ -539,6 +540,14 @@
+     validate_type_windows(packet, bitmap_offset, end)
+ }
+ 
++fn validate_nsec3param(packet: &[u8], start: usize, end: usize) -> Result<(), WireError> {
++    let salt_length_offset = require_offset(start, 4, end)?;
++    let salt_length = usize::from(
++        *packet.get(salt_length_offset).ok_or(WireError::ShortPacket)?,
++    );
++    let expected_end = require_offset(salt_length_offset + 1, salt_length, end)?;
++    require_exact_end(expected_end, end)
++}
++
+ fn validate_type_windows(
+     packet: &[u8],
+     mut offset: usize,

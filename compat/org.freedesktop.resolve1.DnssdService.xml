@@ -1,0 +1,7 @@
+<!-- SPDX-License-Identifier: LGPL-2.1-or-later -->
+<node>
+  <interface name="org.freedesktop.resolve1.DnssdService">
+    <method name="Unregister"/>
+    <signal name="Conflicted"/>
+  </interface>
+</node>
