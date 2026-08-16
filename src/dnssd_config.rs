@@ -14,10 +14,10 @@ use std::path::{Path, PathBuf};
 
 const MAX_SERVICE_FILE_SIZE: u64 = 1024 * 1024;
 const DEFAULT_DIRECTORIES: [&str; 4] = [
-    "/etc/systemd/dnssd",
-    "/run/systemd/dnssd",
-    "/usr/local/lib/systemd/dnssd",
-    "/usr/lib/systemd/dnssd",
+    "/etc/rustd/dnssd",
+    "/run/rustd/dnssd",
+    "/usr/local/lib/rustd/dnssd",
+    "/usr/lib/rustd/dnssd",
 ];
 
 #[derive(Debug)]

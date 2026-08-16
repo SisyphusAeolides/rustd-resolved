@@ -760,8 +760,8 @@ mod tests {
     }
 
     #[test]
-    fn networkd_monitor_socket_opens() {
-        let fd = networkd_open().expect("networkd monitor socket");
+    fn link_dns_monitor_socket_opens() {
+        let fd = networkd_open().expect("link DNS monitor socket");
         // SAFETY: networkd_open returns a new owned descriptor.
         let owned = unsafe { OwnedFd::from_raw_fd(fd) };
         assert!(!networkd_wait(owned.as_raw_fd(), Duration::ZERO).expect("networkd poll"));

@@ -10,7 +10,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-const DEFAULT_HOOK_DIRECTORY: &str = "/run/systemd/resolve.hook";
+const DEFAULT_HOOK_DIRECTORY: &str = crate::native_paths::HOOK_DIR;
 const FILTER_TIMEOUT: Duration = Duration::from_millis(100);
 const MAX_FRAME_SIZE: usize = 1024 * 1024;
 

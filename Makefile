@@ -99,6 +99,8 @@ install: build nss
 	install -Dm0644 packaging/rustd/rustd-resolved-monitor.socket $(DESTDIR)$(RUSTD_UNITDIR)/rustd-resolved-monitor.socket
 	install -Dm0644 packaging/tmpfiles/rustd-resolved.conf $(DESTDIR)$(TMPFILESDIR)/rustd-resolved.conf
 	install -Dm0644 packaging/sysusers/rustd-resolve.conf $(DESTDIR)$(SYSUSERSDIR)/rustd-resolve.conf
+
+install-dbus-compat: install
 	install -Dm0644 packaging/dbus/org.freedesktop.resolve1.service $(DESTDIR)$(DBUSSERVICEDIR)/org.freedesktop.resolve1.service
 	install -Dm0644 packaging/dbus/org.freedesktop.resolve1.conf $(DESTDIR)$(DBUSPOLICYDIR)/org.freedesktop.resolve1.conf
 	install -Dm0644 packaging/polkit/org.freedesktop.resolve1.policy $(DESTDIR)$(POLKITDIR)/org.freedesktop.resolve1.policy

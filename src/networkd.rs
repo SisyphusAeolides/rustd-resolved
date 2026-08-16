@@ -2,8 +2,8 @@
 use crate::config::{
     parse_server_spec, DnsServerSpec, Domain, SupportMode, TlsMode, ValidationMode,
 };
-use crate::daemon::{request_stop, stop_requested};
 use crate::native;
+use crate::native_paths;
 use crate::resolver::Resolver;
 use std::collections::BTreeMap;
 use std::fs;
@@ -14,9 +14,14 @@ use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-const NETWORKD_LINKS_DIRECTORY: &str = "/run/systemd/netif/links";
 const NETWORKD_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const NETWORKD_REOPEN_INTERVAL: Duration = Duration::from_secs(1);
+const NETWORKD_INITIAL_BACKOFF: Duration = Duration::from_secs(1);
+const NETWORKD_MAX_BACKOFF: Duration = Duration::from_secs(60);
+
+fn links_directory() -> std::path::PathBuf {
+    native_paths::link_dns_directory()
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OperationalState {
@@ -79,7 +84,7 @@ impl LinkState {
 }
 
 pub fn read_all() -> io::Result<Vec<LinkState>> {
-    read_directory(Path::new(NETWORKD_LINKS_DIRECTORY))
+    read_directory(&links_directory())
 }
 
 fn read_directory(directory: &Path) -> io::Result<Vec<LinkState>> {
@@ -335,44 +340,57 @@ pub fn synchronize(resolver: &Resolver) -> io::Result<()> {
 }
 
 pub fn spawn(resolver: Arc<Resolver>) -> io::Result<JoinHandle<()>> {
-    synchronize(&resolver)?;
+    if let Err(error) = synchronize(&resolver) {
+        eprintln!("rustd-resolved: initial per-link DNS state unavailable: {error}");
+    }
     thread::Builder::new()
-        .name("resolved-networkd".to_owned())
+        .name("resolved-link-dns".to_owned())
         .spawn(move || monitor(&resolver))
 }
 
 fn monitor(resolver: &Resolver) {
+    use crate::daemon::stop_requested;
+
+    let mut backoff = NETWORKD_INITIAL_BACKOFF;
     while !stop_requested() {
         let fd = match native::networkd_open() {
             Ok(fd) => fd,
             Err(error) => {
-                eprintln!("rustd-resolved: networkd monitor setup failed: {error}");
-                request_stop();
-                break;
+                eprintln!(
+                    "rustd-resolved: per-link DNS monitor unavailable, retrying in {:?}: {error}",
+                    backoff
+                );
+                thread::sleep(backoff);
+                backoff = backoff.saturating_mul(2).min(NETWORKD_MAX_BACKOFF);
+                continue;
             }
         };
+        backoff = NETWORKD_INITIAL_BACKOFF;
         // SAFETY: networkd_open returns a fresh owned descriptor.
         let fd = unsafe { OwnedFd::from_raw_fd(fd) };
         let reopen_at = Instant::now() + NETWORKD_REOPEN_INTERVAL;
         loop {
+            if stop_requested() {
+                return;
+            }
             match native::networkd_wait(fd.as_raw_fd(), NETWORKD_POLL_INTERVAL) {
                 Ok(true) => {
                     if let Err(error) = synchronize(resolver) {
-                        eprintln!("rustd-resolved: failed to refresh networkd DNS state: {error}");
+                        eprintln!("rustd-resolved: failed to refresh per-link DNS state: {error}");
                     }
                 }
-                Ok(false) if stop_requested() => return,
                 Ok(false) if Instant::now() >= reopen_at => {
                     if let Err(error) = synchronize(resolver) {
-                        eprintln!("rustd-resolved: failed to refresh networkd DNS state: {error}");
+                        eprintln!("rustd-resolved: failed to refresh per-link DNS state: {error}");
                     }
                     break;
                 }
                 Ok(false) => {}
                 Err(error) => {
-                    eprintln!("rustd-resolved: networkd monitoring failed: {error}");
-                    request_stop();
-                    return;
+                    eprintln!(
+                        "rustd-resolved: per-link DNS monitor failed, reconnecting: {error}"
+                    );
+                    break;
                 }
             }
         }
@@ -480,6 +498,27 @@ mod tests {
         let routable = parse_link_state(7, "ADMIN_STATE=configured\nOPER_STATE=routable\n")
             .expect("routable state");
         assert!(routable.resolver_relevant());
+    }
+
+    #[test]
+    fn spawn_does_not_require_link_dns_provider() {
+        let directory = std::env::temp_dir().join(format!(
+            "rustd-resolved-missing-links-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&directory);
+        let previous = std::env::var_os("RUSTD_NETWORK_LINKS_DIR");
+        std::env::set_var("RUSTD_NETWORK_LINKS_DIR", &directory);
+
+        let resolver = Arc::new(crate::resolver::Resolver::new(crate::config::Config::default()));
+        spawn(Arc::clone(&resolver)).expect("spawn link DNS monitor without provider");
+
+        if let Some(value) = previous {
+            std::env::set_var("RUSTD_NETWORK_LINKS_DIR", value);
+        } else {
+            std::env::remove_var("RUSTD_NETWORK_LINKS_DIR");
+        }
+        let _ = fs::remove_dir_all(directory);
     }
 
     #[test]

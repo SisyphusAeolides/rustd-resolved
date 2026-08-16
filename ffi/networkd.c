@@ -12,9 +12,9 @@
 #include <unistd.h>
 
 static const char *const watch_paths[] = {
-    "/run/systemd/netif/links",
-    "/run/systemd/netif",
-    "/run/systemd",
+    "/run/rustd/network/links",
+    "/run/rustd/network",
+    "/run/rustd",
     "/run",
 };
 

@@ -15,8 +15,8 @@ use std::process::ExitCode;
 use std::time::{Duration, Instant};
 use zbus::blocking::{Connection, Proxy};
 
-const DEFAULT_SOCKET: &str = "/run/systemd/resolve/io.rustd.Resolve";
-const DEFAULT_MONITOR_SOCKET: &str = "/run/systemd/resolve/io.rustd.Resolve.Monitor";
+const DEFAULT_SOCKET: &str = "/run/rustd/resolve/io.rustd.Resolve";
+const DEFAULT_MONITOR_SOCKET: &str = "/run/rustd/resolve/io.rustd.Resolve.Monitor";
 const MAX_REPLY_SIZE: usize = 1024 * 1024;
 
 fn print_systemd_version() {

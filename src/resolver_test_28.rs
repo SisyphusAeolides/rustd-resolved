@@ -19,7 +19,11 @@ mod test_28_configuration_reload {
 
     #[test]
     fn reload_replaces_live_fallback_servers() {
-        let resolver = Resolver::new(Config::default());
+        let mut initial = Config::default();
+        initial
+            .fallback_upstreams
+            .push("192.0.2.53:53".parse().expect("fallback server"));
+        let resolver = Resolver::new(initial);
         assert!(!resolver.config().configured_fallback_upstreams().is_empty());
 
         let mut reloaded = Config::default();

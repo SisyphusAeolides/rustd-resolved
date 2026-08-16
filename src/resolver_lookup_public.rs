@@ -539,7 +539,11 @@ mod dnssec_capability_tests {
 
     #[test]
     fn manager_capability_tracks_its_current_fallback_server() {
-        let resolver = Resolver::new(Config::default());
+        let mut config = Config::default();
+        config
+            .fallback_upstreams
+            .push("192.0.2.53:53".parse().expect("fallback server"));
+        let resolver = Resolver::new(config);
         assert!(resolver.manager_dnssec_supported());
 
         let address = resolver.config().fallback_upstreams[0];

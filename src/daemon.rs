@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
+use crate::bounded_executor::{peer_key_from_socket_addr, tcp_executor};
 use crate::config::{Config, SupportMode};
 use crate::native;
 use crate::resolver::{QueryMode, Resolver};
@@ -430,13 +431,14 @@ fn tcp_listener(endpoint: &TcpEndpoint, resolver: &Arc<Resolver>, local_stop: &A
             Ok((stream, peer)) => {
                 let resolver = Arc::clone(resolver);
                 let mode = endpoint.mode;
-                let _ = thread::Builder::new()
-                    .name("resolved-tcp-client".to_owned())
-                    .spawn(move || {
-                        if let Err(error) = tcp_client(stream, &resolver, mode) {
-                            eprintln!("rustd-resolved: TCP client {peer} failed: {error}");
-                        }
-                    });
+                let peer_key = peer_key_from_socket_addr(peer);
+                if !tcp_executor().try_submit(peer_key, move || {
+                    if let Err(error) = tcp_client(stream, &resolver, mode) {
+                        eprintln!("rustd-resolved: TCP client {peer} failed: {error}");
+                    }
+                }) {
+                    eprintln!("rustd-resolved: rejected TCP client {peer}: executor overloaded");
+                }
             }
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
                 thread::sleep(Duration::from_millis(50));

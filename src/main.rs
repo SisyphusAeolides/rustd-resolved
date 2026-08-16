@@ -55,7 +55,7 @@ impl Default for Options {
             check_config: false,
             no_stub: false,
             no_varlink: false,
-            no_dbus: false,
+            no_dbus: true,
         }
     }
 }
@@ -364,6 +364,7 @@ fn parse_options_from(
             "--no-stub" => options.no_stub = true,
             "--no-varlink" => options.no_varlink = true,
             "--no-dbus" => options.no_dbus = true,
+            "--dbus" => options.no_dbus = false,
             "--bus-introspect" => {
                 let pattern = option_value(inline_value, &mut arguments, "--bus-introspect")?;
                 print!(
@@ -457,6 +458,7 @@ fn help_text(program: &str) -> String {
             "     --no-stub             Disable DNS stub listeners\n",
             "     --no-varlink          Disable Varlink service\n",
             "     --no-dbus             Disable D-Bus service\n",
+            "     --dbus                Enable org.freedesktop.resolve1 D-Bus compat\n",
             "     --bus-introspect=PATH Write D-Bus XML introspection data\n"
         ),
         program

@@ -53,21 +53,10 @@ pub struct StaticRecords {
 
 impl StaticRecords {
     pub fn system(enabled: bool) -> Self {
-        Self::new(
-            enabled,
-            vec![
-                // Keep legacy locations as compatibility inputs, but let the
-                // native RustD location win at each precedence level.
-                PathBuf::from("/usr/lib/systemd/resolve/static.d"),
-                PathBuf::from("/usr/lib/rustd/resolve/static.d"),
-                PathBuf::from("/usr/local/lib/systemd/resolve/static.d"),
-                PathBuf::from("/usr/local/lib/rustd/resolve/static.d"),
-                PathBuf::from("/run/systemd/resolve/static.d"),
-                PathBuf::from("/run/rustd/resolve/static.d"),
-                PathBuf::from("/etc/systemd/resolve/static.d"),
-                PathBuf::from("/etc/rustd/resolve/static.d"),
-            ],
-        )
+        let mut directories = crate::native_paths::static_record_directories();
+        #[cfg(feature = "systemd-compat-paths")]
+        directories.extend(crate::native_paths::static_record_directories_compat());
+        Self::new(enabled, directories)
     }
 
     pub fn new(enabled: bool, directories: Vec<PathBuf>) -> Self {
@@ -133,18 +122,14 @@ mod system_path_tests {
     use super::*;
 
     #[test]
-    fn native_static_record_paths_follow_legacy_compatibility_paths() {
+    fn native_static_record_paths_follow_rustd_layout() {
         let database = StaticRecords::system(true);
         assert_eq!(
             database.directories,
             vec![
-                PathBuf::from("/usr/lib/systemd/resolve/static.d"),
                 PathBuf::from("/usr/lib/rustd/resolve/static.d"),
-                PathBuf::from("/usr/local/lib/systemd/resolve/static.d"),
                 PathBuf::from("/usr/local/lib/rustd/resolve/static.d"),
-                PathBuf::from("/run/systemd/resolve/static.d"),
                 PathBuf::from("/run/rustd/resolve/static.d"),
-                PathBuf::from("/etc/systemd/resolve/static.d"),
                 PathBuf::from("/etc/rustd/resolve/static.d"),
             ]
         );

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
+use crate::bounded_executor::varlink_executor;
 use crate::daemon::stop_requested;
 use crate::dbus_resolve1_abi::flags::{
     SD_RESOLVED_DNS, SD_RESOLVED_NO_ADDRESS, SD_RESOLVED_NO_SEARCH, SD_RESOLVED_NO_TXT,
@@ -274,14 +275,29 @@ fn spawn_varlink_connection(
     endpoint: VarlinkEndpoint,
 ) -> io::Result<()> {
     let resolver = Arc::clone(resolver);
-    thread::Builder::new()
-        .name(thread_name.to_owned())
-        .spawn(move || {
-            if let Err(error) = serve_connection(stream, resolver, endpoint) {
-                eprintln!("rustd-resolved: {interface_name} Varlink connection failed: {error}");
-            }
-        })?;
+    let peer_key = varlink_peer_key(&stream);
+    if !varlink_executor().try_submit(peer_key, move || {
+        if let Err(error) = serve_connection(stream, resolver, endpoint) {
+            eprintln!("rustd-resolved: {interface_name} Varlink connection failed: {error}");
+        }
+    }) {
+        eprintln!("rustd-resolved: rejected {thread_name} Varlink connection: executor overloaded");
+    }
     Ok(())
+}
+
+fn varlink_peer_key(stream: &UnixStream) -> u64 {
+    varlink_peer_key_from_fd(stream.as_raw_fd())
+}
+
+fn varlink_peer_key_from_fd(client_fd: RawFd) -> u64 {
+    use std::hash::{Hash, Hasher};
+    if let Ok(credentials) = crate::native::peer_credentials(client_fd) {
+        return u64::from(credentials.uid) << 32 | u64::from(credentials.pid);
+    }
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    client_fd.hash(&mut hasher);
+    hasher.finish()
 }
 
 fn take_activated_sockets() -> io::Result<(Vec<ActivatedVarlinkSocket>, Vec<ActivatedVarlinkSocket>)>
@@ -517,20 +533,24 @@ fn dispatch_cancellable(
     let resolver = Arc::clone(resolver);
     let input = input.to_owned();
     let (sender, receiver) = mpsc::channel();
-    thread::Builder::new()
-        .name("resolved-varlink-request".to_owned())
-        .spawn(move || {
-            let reply = crate::query_cancel::with(worker_cancellation, || {
-                dispatch_for_endpoint_with_access(
-                    &input,
-                    &resolver,
-                    can_control,
-                    service_control,
-                    endpoint,
-                )
-            });
-            let _ = sender.send(reply);
-        })?;
+    let peer_key = varlink_peer_key_from_fd(client_fd);
+    if !varlink_executor().try_submit(peer_key, move || {
+        let reply = crate::query_cancel::with(worker_cancellation, || {
+            dispatch_for_endpoint_with_access(
+                &input,
+                &resolver,
+                can_control,
+                service_control,
+                endpoint,
+            )
+        });
+        let _ = sender.send(reply);
+    }) {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Varlink request rejected: executor overloaded",
+        ));
+    }
 
     loop {
         match receiver.recv_timeout(Duration::from_millis(20)) {
@@ -2190,8 +2210,8 @@ mod tests {
     #[test]
     fn monitor_socket_is_a_sibling_of_the_resolve_socket() {
         assert_eq!(
-            monitor_path_for(Path::new("/run/systemd/resolve/io.rustd.Resolve")),
-            PathBuf::from("/run/systemd/resolve/io.rustd.Resolve.Monitor")
+            monitor_path_for(Path::new("/run/rustd/resolve/io.rustd.Resolve")),
+            PathBuf::from("/run/rustd/resolve/io.rustd.Resolve.Monitor")
         );
         assert_eq!(
             monitor_path_for(Path::new("/tmp/resolved-test.sock")),
@@ -2296,7 +2316,7 @@ mod tests {
 
     #[test]
     fn fallback_listener_plan_respects_socket_activation_context() {
-        let path = Path::new("/run/systemd/resolve/io.rustd.Resolve");
+        let path = Path::new("/run/rustd/resolve/io.rustd.Resolve");
         let monitor = path.with_file_name("io.rustd.Resolve.Monitor");
         let same_path = Path::new("/tmp/rustd-resolved/io.rustd.Resolve");
 

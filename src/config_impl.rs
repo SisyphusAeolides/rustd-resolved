@@ -3,15 +3,9 @@ impl Config {
     pub fn load(path: impl AsRef<Path>) -> Result<Self, ConfigError> {
         let path = path.as_ref();
         let mut config = Self::default();
-        let builtin_fallbacks = std::mem::take(&mut config.fallback_upstreams);
-        let builtin_fallback_specs = std::mem::take(&mut config.fallback_upstream_specs);
         let mut assignments = apply_optional_file(&mut config, path)?;
         for drop_in in discover_drop_ins(path)? {
             assignments.merge(apply_optional_file(&mut config, &drop_in)?);
-        }
-        if !assignments.fallback_dns {
-            config.fallback_upstreams = builtin_fallbacks;
-            config.fallback_upstream_specs = builtin_fallback_specs;
         }
 
         let may_read_external_configuration = !assignments.dns && !assignments.domains;
@@ -57,13 +51,8 @@ impl Config {
             })?;
             let key = key.trim();
             if key == "FallbackDNS" && !assignments.fallback_dns {
-                let defaults = Self::default();
-                if self.fallback_upstreams == defaults.fallback_upstreams
-                    && self.fallback_upstream_specs == defaults.fallback_upstream_specs
-                {
-                    self.fallback_upstreams.clear();
-                    self.fallback_upstream_specs.clear();
-                }
+                self.fallback_upstreams.clear();
+                self.fallback_upstream_specs.clear();
             }
             self.apply_setting(key, value.trim())
                 .map_err(|error| ConfigError::Line {

@@ -58,6 +58,8 @@ indexmap = "=2.2.6"
 [features]
 default = ["fortran-routing", "idna-name"]
 fortran-routing = []
+systemd-compat-paths = []
+resolve1-dbus-compat = []
 hyper = ["dep:tokio-util"]
 beast-wire = []
 kalman = []

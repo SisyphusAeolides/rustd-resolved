@@ -6,6 +6,7 @@
 //! the mature resolver implementation stays single-sourced while migration
 //! compatibility remains unreachable as a public socket path.
 
+use rustd_resolved::bounded_executor::varlink_executor;
 use rustd_resolved::daemon::stop_requested;
 use rustd_resolved::json::{self, Value};
 use rustd_resolved::native;
@@ -286,14 +287,29 @@ fn spawn_proxy(
     endpoint: Endpoint,
     thread_name: &str,
 ) -> io::Result<()> {
-    thread::Builder::new()
-        .name(thread_name.to_owned())
-        .spawn(move || {
-            if let Err(error) = proxy_connection(client, &core_path, endpoint) {
-                eprintln!("rustd-resolved: native Varlink proxy failed: {error}");
-            }
-        })?;
+    let peer_key = varlink_frontend_peer_key(&client);
+    if !varlink_executor().try_submit(peer_key, move || {
+        if let Err(error) = proxy_connection(client, &core_path, endpoint) {
+            eprintln!("rustd-resolved: native Varlink proxy failed: {error}");
+        }
+    }) {
+        eprintln!("rustd-resolved: rejected {thread_name} Varlink connection: executor overloaded");
+    }
     Ok(())
+}
+
+fn varlink_frontend_peer_key(stream: &UnixStream) -> u64 {
+    use std::hash::{Hash, Hasher};
+    if let Ok(credentials) = native::peer_credentials(stream.as_raw_fd()) {
+        return u64::from(credentials.uid) << 32 | u64::from(credentials.pid);
+    }
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    if let Ok(address) = stream.peer_addr() {
+        if let Some(path) = address.as_pathname() {
+            path.hash(&mut hasher);
+        }
+    }
+    hasher.finish()
 }
 
 fn proxy_connection(

@@ -10,6 +10,7 @@
 
 extern crate self as rustd_resolved;
 
+pub mod bounded_executor;
 pub mod cache;
 pub mod cache_x;
 pub mod config;
@@ -33,6 +34,7 @@ pub mod llmnr;
 pub mod log_control;
 pub mod mdns;
 pub mod native;
+pub mod native_paths;
 pub mod native_varlink_frontend;
 pub mod netlink;
 pub mod networkd;

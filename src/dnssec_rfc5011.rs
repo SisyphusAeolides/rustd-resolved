@@ -31,6 +31,9 @@ pub struct TrustAnchorEntry {
 }
 
 /// Manages RFC 5011 trust anchors, handling hold-down timers and persistence.
+///
+/// RFC 5011 automation is experimental and disabled unless
+/// `RUSTD_RESOLVED_RFC5011=1` is set in the environment.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TrustAnchorManager {
     anchors: HashMap<Vec<u8>, TrustAnchorEntry>,
@@ -45,12 +48,20 @@ impl Default for TrustAnchorManager {
 }
 
 impl TrustAnchorManager {
+    /// Returns whether RFC 5011 trust-anchor management is enabled.
+    pub fn enabled() -> bool {
+        matches!(
+            std::env::var("RUSTD_RESOLVED_RFC5011").ok().as_deref(),
+            Some("1") | Some("yes") | Some("true")
+        )
+    }
+
     /// Creates a new TrustAnchorManager with default settings (30 days hold-down).
     pub fn new() -> Self {
         Self {
             anchors: HashMap::new(),
             hold_down_time: Duration::from_secs(30 * 24 * 60 * 60), // 30 days
-            persistence_path: PathBuf::from("/var/lib/systemd/resolved/rfc5011-trust-anchors.bin"),
+            persistence_path: PathBuf::from("/var/lib/rustd/resolved/rfc5011-trust-anchors.bin"),
         }
     }
 

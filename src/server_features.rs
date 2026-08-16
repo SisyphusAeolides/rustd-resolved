@@ -14,7 +14,7 @@ pub struct ServerFeatures {
     pub udp_payload: u16,
     pub tcp_required: bool,
     pub dot_ok: Option<bool>,
-    pub doh_ok: Option<bool>,
+    pub doh_ok: Option<bool>, // Not advertised via Varlink until DoH transport exists.
     pub cookie_ok: Option<bool>,
     pub dnssec_validated_ok: Option<bool>,
     #[serde(skip)]

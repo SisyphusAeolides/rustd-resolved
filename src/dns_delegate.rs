@@ -120,18 +120,7 @@ impl DnsDelegate {
 }
 
 pub fn system_search_dirs() -> Vec<PathBuf> {
-    if let Some(value) = std::env::var_os("RUSTD_RESOLVED_DNS_DELEGATE_DIRS") {
-        return std::env::split_paths(&value).collect();
-    }
-    [
-        "/etc/systemd/dns-delegate.d",
-        "/run/systemd/dns-delegate.d",
-        "/usr/local/lib/systemd/dns-delegate.d",
-        "/usr/lib/systemd/dns-delegate.d",
-    ]
-    .into_iter()
-    .map(PathBuf::from)
-    .collect()
+    crate::native_paths::dns_delegate_search_dirs()
 }
 
 pub fn load_system() -> Vec<DnsDelegate> {
