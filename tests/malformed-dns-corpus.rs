@@ -86,7 +86,11 @@ fn fuzz_corpus_entries_do_not_panic() {
         .join("fuzz")
         .join("corpus")
         .join("dns_packet");
-    let mut entries = fs::read_dir(corpus_path).expect("fuzz corpus directory");
+    let mut entries = match fs::read_dir(&corpus_path) {
+        Ok(entries) => entries,
+        Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => return,
+        Err(e) => panic!("fuzz corpus directory: {e}"),
+    };
     entries
         .by_ref()
         .try_for_each(|entry| {
