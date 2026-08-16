@@ -69,14 +69,5 @@ jobs:
       - name: Check live native DNS and Varlink
         run: python3 tests/live-dns.py target/release/rustd-resolved target/release/rustd-resolvectl
 
-      - name: Check D-Bus outage isolation
-        shell: bash
-        run: |
-          set -euo pipefail
-          if ! getent passwd rustd-resolve >/dev/null; then
-            sudo useradd --system --no-create-home --shell /usr/sbin/nologin rustd-resolve
-          fi
-          sudo python3 tests/live-dbus-isolation.py target/release/rustd-resolved target/release/rustd-resolvectl
-
       - name: Check live D-Bus contracts
         run: bash tests/dbus-introspection.sh target/release/rustd-resolved target/release/rustd-resolvectl

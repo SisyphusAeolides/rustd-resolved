@@ -127,9 +127,9 @@ mod test_13_transport_fallback {
 
     #[test]
     fn truncated_udp_uses_tcp_without_permanently_switching_transport() {
-        let stream_listener = TcpListener::bind("127.0.0.1:0").expect("mock TCP bind");
-        let server_address = stream_listener.local_addr().expect("mock DNS address");
-        let datagram_socket = UdpSocket::bind(server_address).expect("mock UDP bind");
+        let datagram_socket = UdpSocket::bind("127.0.0.1:0").expect("mock UDP bind");
+        let server_address = datagram_socket.local_addr().expect("mock DNS address");
+        let stream_listener = TcpListener::bind(server_address).expect("mock TCP bind");
         datagram_socket
             .set_read_timeout(Some(Duration::from_secs(2)))
             .expect("mock UDP timeout");
