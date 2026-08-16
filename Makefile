@@ -8,6 +8,9 @@ LDLIBS ?= -lssl -lcrypto
 PREFIX ?= /usr
 BINDIR ?= $(PREFIX)/bin
 LIBDIR ?= $(PREFIX)/lib
+SYSCONFDIR ?= /etc
+DATADIR ?= $(PREFIX)/share
+NSSWITCHDIR ?= $(DATADIR)/rustd-resolved
 RUSTD_LIBEXECDIR ?= $(PREFIX)/lib/rustd
 RUSTD_UNITDIR ?= $(PREFIX)/lib/rustd/system
 TMPFILESDIR ?= $(PREFIX)/lib/tmpfiles.d
@@ -66,8 +69,12 @@ check-packaging:
 	test -f packaging/rustd/rustd-resolved-monitor.socket; \
 	test -f packaging/tmpfiles/rustd-resolved.conf; \
 	test -f packaging/sysusers/rustd-resolve.conf; \
+	test -f packaging/nsswitch.conf.fragment; \
 	grep -Fq 'After=rustd-sysusers.service network-pre.target' packaging/rustd/rustd-resolved.service; \
-	grep -Fq 'ExecStart=/usr/lib/rustd/rustd-resolved' packaging/rustd/rustd-resolved.service; \
+	grep -Fq 'ExecStart=/usr/lib/rustd/rustd-resolved --dbus' packaging/rustd/rustd-resolved.service; \
+	grep -Fq 'Conflicts=systemd-resolved.service' packaging/rustd/rustd-resolved.service; \
+	grep -Fq 'L+ /etc/resolv.conf - - - - /run/rustd/resolve/stub-resolv.conf' packaging/tmpfiles/rustd-resolved.conf; \
+	grep -Fq 'hosts: files myhostname resolve [!UNAVAIL=return] dns' packaging/nsswitch.conf.fragment; \
 	grep -Fq 'Exec=/usr/bin/rustctl start rustd-resolved.service' packaging/dbus/org.freedesktop.resolve1.service; \
 	grep -Fq '<policy user="rustd-resolve">' packaging/dbus/org.freedesktop.resolve1.conf; \
 	! grep -E -q 'SystemdService=|systemd-resolve|Exec=/bin/false' packaging/dbus/org.freedesktop.resolve1.service packaging/dbus/org.freedesktop.resolve1.conf; \
@@ -77,7 +84,7 @@ check-packaging:
 	grep -Fq 'RUNTIME_DIR="$${RUSTD_RESOLVED_RUNTIME_DIR:-/run/rustd/resolve}"' scripts/boot-smoke.sh; \
 	grep -Fq 'io.rustd.Resolve' scripts/boot-smoke.sh; \
 	! grep -E -q 'systemctl|systemd-resolved|/run/systemd/resolve|resolvectl-rs' scripts/boot-smoke.sh; \
-	! grep -R -E 'systemd-resolved|systemd-resolve|/run/systemd/resolve|/usr/lib/systemd' packaging/rustd packaging/tmpfiles/rustd-resolved.conf packaging/sysusers/rustd-resolve.conf
+	! grep -E -q 'systemd-resolved|systemd-resolve|/run/systemd/resolve|/usr/lib/systemd' packaging/rustd/rustd-resolved-varlink.socket packaging/rustd/rustd-resolved-monitor.socket packaging/tmpfiles/rustd-resolved.conf packaging/sysusers/rustd-resolve.conf
 
 check-live: build
 	python3 tests/live-dns.py target/release/rustd-resolved target/release/rustd-resolvectl
@@ -94,16 +101,18 @@ install: build nss
 	install -Dm0755 target/release/rustd-resolved $(DESTDIR)$(RUSTD_LIBEXECDIR)/rustd-resolved
 	install -Dm0755 target/release/rustd-resolvectl $(DESTDIR)$(BINDIR)/rustd-resolvectl
 	install -Dm0755 nss/libnss_resolve.so.2 $(DESTDIR)$(LIBDIR)/libnss_resolve.so.2
+	install -Dm0644 packaging/resolved.conf $(DESTDIR)$(SYSCONFDIR)/rustd/resolved.conf
+	install -Dm0644 packaging/nsswitch.conf.fragment $(DESTDIR)$(NSSWITCHDIR)/nsswitch.conf.fragment
 	install -Dm0644 packaging/rustd/rustd-resolved.service $(DESTDIR)$(RUSTD_UNITDIR)/rustd-resolved.service
 	install -Dm0644 packaging/rustd/rustd-resolved-varlink.socket $(DESTDIR)$(RUSTD_UNITDIR)/rustd-resolved-varlink.socket
 	install -Dm0644 packaging/rustd/rustd-resolved-monitor.socket $(DESTDIR)$(RUSTD_UNITDIR)/rustd-resolved-monitor.socket
 	install -Dm0644 packaging/tmpfiles/rustd-resolved.conf $(DESTDIR)$(TMPFILESDIR)/rustd-resolved.conf
 	install -Dm0644 packaging/sysusers/rustd-resolve.conf $(DESTDIR)$(SYSUSERSDIR)/rustd-resolve.conf
-
-install-dbus-compat: install
 	install -Dm0644 packaging/dbus/org.freedesktop.resolve1.service $(DESTDIR)$(DBUSSERVICEDIR)/org.freedesktop.resolve1.service
 	install -Dm0644 packaging/dbus/org.freedesktop.resolve1.conf $(DESTDIR)$(DBUSPOLICYDIR)/org.freedesktop.resolve1.conf
 	install -Dm0644 packaging/polkit/org.freedesktop.resolve1.policy $(DESTDIR)$(POLKITDIR)/org.freedesktop.resolve1.policy
+
+install-dbus-compat: install
 
 clean:
 	rm -rf build target

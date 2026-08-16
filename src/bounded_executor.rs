@@ -237,18 +237,25 @@ mod tests {
     #[test]
     fn enforces_per_peer_concurrency_limit() {
         let executor = BoundedExecutor::new(4, 4, 2);
-        let gate = Arc::new(Barrier::new(3));
+        let (first_release, first_wait) = mpsc::channel();
+        let (second_release, second_wait) = mpsc::channel();
 
-        let first_gate = Arc::clone(&gate);
-        let second_gate = Arc::clone(&gate);
         assert!(executor.try_submit(42, move || {
-            first_gate.wait();
+            first_wait.recv().expect("test releases first job");
         }));
         assert!(executor.try_submit(42, move || {
-            second_gate.wait();
+            second_wait.recv().expect("test releases second job");
         }));
+        let third_rejected = !executor.try_submit(42, || {});
+
+        // Always unblock both jobs before asserting. An assertion before the
+        // barrier release used to leave worker threads blocked during executor
+        // teardown, which made this test hang instead of report its failure.
+        first_release.send(()).expect("release first job");
+        second_release.send(()).expect("release second job");
+
         assert!(
-            !executor.try_submit(42, || {}),
+            third_rejected,
             "third concurrent job for the same peer must be rejected"
         );
         assert_eq!(
@@ -258,7 +265,5 @@ mod tests {
                 .load(Ordering::Relaxed),
             1
         );
-
-        gate.wait();
     }
 }

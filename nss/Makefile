@@ -1,6 +1,8 @@
 CC ?= cc
 CFLAGS ?= -O2 -g -fPIC -std=c17 -Wall -Wextra -Werror -Wpedantic -fstack-protector-strong -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3
 LDFLAGS_SO ?= -shared -Wl,-soname,libnss_resolve.so.2 -Wl,--version-script=nss-resolve.sym -Wl,-z,relro,-z,now
+PREFIX ?= /usr
+LIBDIR ?= $(PREFIX)/lib
 
 OBJS = nss_resolve.o nss_resolve_shm.o nss_dns_stub.o nss_varlink.o
 TEST_OBJS = test_nss.o test_shm.o
@@ -29,5 +31,4 @@ clean:
 	rm -f $(OBJS) $(TEST_OBJS) libnss_resolve.so.2 test_nss test_shm
 
 install: all
-	install -d $(DESTDIR)/usr/lib64
-	install -m 755 libnss_resolve.so.2 $(DESTDIR)/usr/lib64/libnss_resolve.so.2
+	install -Dm0755 libnss_resolve.so.2 $(DESTDIR)$(LIBDIR)/libnss_resolve.so.2

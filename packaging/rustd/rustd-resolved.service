@@ -3,10 +3,12 @@ Description=RustD Network Name Resolver
 After=rustd-sysusers.service network-pre.target
 Before=network.target nss-lookup.target
 Wants=nss-lookup.target
+Conflicts=systemd-resolved.service
 
 [Service]
 Type=notify
-ExecStart=/usr/lib/rustd/rustd-resolved
+# Own org.freedesktop.resolve1 when replacing systemd-resolved.
+ExecStart=/usr/lib/rustd/rustd-resolved --dbus
 Restart=always
 RestartSec=1s
 
