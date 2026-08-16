@@ -1,19 +1,21 @@
-name: RustD resolver D-Bus isolation hardening
+name: RustD resolver D-Bus isolation validation
 
 on:
   push:
     branches:
       - main
+  pull_request:
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: rustd-resolved-dbus-isolation-hardening
-  cancel-in-progress: false
+  group: rustd-resolved-dbus-isolation-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  harden:
+  validate:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -31,12 +33,11 @@ jobs:
           rustup toolchain install stable --profile minimal --component rustfmt,clippy
           rustup toolchain install 1.74.0 --profile minimal --component clippy
 
-      - name: Harden optional D-Bus bridge
+      - name: Validate finalized source
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/harden-dbus-bridge.py
-          cargo +stable fmt --all
+          cargo +stable fmt --all -- --check
           git diff --check
 
       - name: Check native ABI packaging and NSS
@@ -79,16 +80,3 @@ jobs:
 
       - name: Check live D-Bus contracts
         run: bash tests/dbus-introspection.sh target/release/rustd-resolved target/release/rustd-resolvectl
-
-      - name: Commit hardened bridge
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm .github/workflows/dbus-isolation-hardening.yml
-          rm scripts/harden-dbus-bridge.py
-          git diff --check
-          git config user.name "Kenny Glowner"
-          git config user.email "SisyphusAeolides@pm.me"
-          git add -A
-          git commit -m "fix: isolate optional D-Bus bridge"
-          git push origin HEAD:main
