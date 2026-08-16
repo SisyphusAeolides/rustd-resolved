@@ -223,7 +223,10 @@ mod tests {
             );
         }
         assert_eq!(
-            executor.metrics().rejected_queue_full.load(Ordering::Relaxed),
+            executor
+                .metrics()
+                .rejected_queue_full
+                .load(Ordering::Relaxed),
             4
         );
 
@@ -249,7 +252,10 @@ mod tests {
             "third concurrent job for the same peer must be rejected"
         );
         assert_eq!(
-            executor.metrics().rejected_peer_quota.load(Ordering::Relaxed),
+            executor
+                .metrics()
+                .rejected_peer_quota
+                .load(Ordering::Relaxed),
             1
         );
 

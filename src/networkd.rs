@@ -387,9 +387,7 @@ fn monitor(resolver: &Resolver) {
                 }
                 Ok(false) => {}
                 Err(error) => {
-                    eprintln!(
-                        "rustd-resolved: per-link DNS monitor failed, reconnecting: {error}"
-                    );
+                    eprintln!("rustd-resolved: per-link DNS monitor failed, reconnecting: {error}");
                     break;
                 }
             }
@@ -510,7 +508,9 @@ mod tests {
         let previous = std::env::var_os("RUSTD_NETWORK_LINKS_DIR");
         std::env::set_var("RUSTD_NETWORK_LINKS_DIR", &directory);
 
-        let resolver = Arc::new(crate::resolver::Resolver::new(crate::config::Config::default()));
+        let resolver = Arc::new(crate::resolver::Resolver::new(
+            crate::config::Config::default(),
+        ));
         spawn(Arc::clone(&resolver)).expect("spawn link DNS monitor without provider");
 
         if let Some(value) = previous {
