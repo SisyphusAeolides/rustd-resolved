@@ -83,7 +83,7 @@ printf '%s\n' \
     >"$WORK/delegates/corp-vpn.dns-delegate"
 printf '%s\n' '[Delegate]' 'FirewallMark=0' \
     >"$WORK/delegates/corp-vpn.dns-delegate.d/10-mark.conf"
-"$BINARY" --config "$config" --upstream "127.0.0.1:$upstream_port" >"$WORK/daemon.log" 2>&1 &
+"$BINARY" --dbus --config "$config" --upstream "127.0.0.1:$upstream_port" >"$WORK/daemon.log" 2>&1 &
 daemon_pid=$!
 
 cleanup() {
