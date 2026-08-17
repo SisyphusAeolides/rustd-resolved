@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 use rustd_resolved::config::{parse_server, Config, DnsStubListenerMode};
 use rustd_resolved::daemon::{install_signal_handlers, request_stop, run_stub_with_config};
-use rustd_resolved::dbus::DbusServer;
-use rustd_resolved::native_varlink_frontend::NativeVarlinkServer;
 use rustd_resolved::resolver::Resolver;
+use rustd_resolved::varlink::VarlinkServer;
 use std::env;
 use std::error::Error;
 use std::fmt;
@@ -27,7 +26,6 @@ struct Options {
     check_config: bool,
     no_stub: bool,
     no_varlink: bool,
-    no_dbus: bool,
 }
 
 #[derive(Debug)]
@@ -55,7 +53,6 @@ impl Default for Options {
             check_config: false,
             no_stub: false,
             no_varlink: false,
-            no_dbus: true,
         }
     }
 }
@@ -166,7 +163,7 @@ fn run_resolver(config: &Config, options: &Options) -> Result<(), Box<dyn Error>
     let primary_stub_enabled = config.dns_stub_listener != DnsStubListenerMode::No
         && (!config.listeners.is_empty() || !config.proxy_listeners.is_empty());
     let stub_enabled = primary_stub_enabled || !config.dns_stub_listener_extra.is_empty();
-    if options.no_varlink && options.no_dbus && !stub_enabled {
+    if options.no_varlink && !stub_enabled {
         return Err("all resolver interfaces are disabled".into());
     }
 
@@ -183,7 +180,6 @@ fn run_resolver(config: &Config, options: &Options) -> Result<(), Box<dyn Error>
         eprintln!("rustd-resolved: warning: no upstream DNS servers are configured");
     }
 
-    let dbus_thread = spawn_dbus(&resolver, options.no_dbus)?;
     let varlink_thread = spawn_varlink(&resolver, config, options.no_varlink)?;
     log_stub_listeners(config, primary_stub_enabled);
 
@@ -192,33 +188,10 @@ fn run_resolver(config: &Config, options: &Options) -> Result<(), Box<dyn Error>
     if let Some(thread) = varlink_thread {
         let _ = thread.join();
     }
-    if let Some(thread) = dbus_thread {
-        let _ = thread.join();
-    }
     let _ = networkd_thread.join();
     let _ = netlink_thread.join();
     result?;
     Ok(())
-}
-
-fn spawn_dbus(
-    resolver: &Arc<Resolver>,
-    disabled: bool,
-) -> Result<Option<thread::JoinHandle<()>>, Box<dyn Error>> {
-    if disabled {
-        return Ok(None);
-    }
-    let server = DbusServer::new(Arc::clone(resolver));
-    Ok(Some(
-        thread::Builder::new()
-            .name("rustd-resolved-dbus".to_owned())
-            .spawn(move || {
-                if let Err(error) = server.run() {
-                    eprintln!("rustd-resolved: D-Bus server failed: {error}");
-                    request_stop();
-                }
-            })?,
-    ))
 }
 
 fn spawn_varlink(
@@ -229,7 +202,7 @@ fn spawn_varlink(
     if disabled {
         return Ok(None);
     }
-    let server = NativeVarlinkServer::new(config.varlink_path.clone(), Arc::clone(resolver))?;
+    let server = VarlinkServer::new(config.varlink_path.clone(), Arc::clone(resolver))?;
     Ok(Some(
         thread::Builder::new()
             .name("rustd-resolved-varlink".to_owned())
@@ -363,16 +336,6 @@ fn parse_options_from(
             "--check-config" => options.check_config = true,
             "--no-stub" => options.no_stub = true,
             "--no-varlink" => options.no_varlink = true,
-            "--no-dbus" => options.no_dbus = true,
-            "--dbus" => options.no_dbus = false,
-            "--bus-introspect" => {
-                let pattern = option_value(inline_value, &mut arguments, "--bus-introspect")?;
-                print!(
-                    "{}",
-                    rustd_resolved::service_introspection::render(&pattern)?
-                );
-                return Ok(None);
-            }
             "--version" => {
                 reject_inline_value(program, name, inline_value)?;
                 println!("rustd-resolved {}", env!("CARGO_PKG_VERSION"));
@@ -457,9 +420,7 @@ fn help_text(program: &str) -> String {
             "     --check-config        Validate configuration and exit\n",
             "     --no-stub             Disable DNS stub listeners\n",
             "     --no-varlink          Disable Varlink service\n",
-            "     --no-dbus             Disable D-Bus service\n",
-            "     --dbus                Enable org.freedesktop.resolve1 D-Bus compat\n",
-            "     --bus-introspect=PATH Write D-Bus XML introspection data\n"
+            "\n"
         ),
         program
     )
@@ -488,10 +449,7 @@ mod tests {
             cli_error(&["--version=value"]),
             "/usr/lib/rustd/rustd-resolved: option '--version' doesn't allow an argument"
         );
-        assert_eq!(
-            cli_error(&["--bus-introspect"]),
-            "--bus-introspect requires a value"
-        );
+        assert!(cli_error(&["--dbus"]).contains("unrecognized option"));
     }
 
     #[test]

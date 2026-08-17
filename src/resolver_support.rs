@@ -64,7 +64,7 @@ pub(crate) fn response_full_rcode(
 }
 
 pub const fn request_protocol_enabled(flags: u64, protocol: u64) -> bool {
-    if (flags & crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_ZONE != 0)
+    if (flags & crate::resolve_flags::flags::RUSTD_RESOLVE_NO_ZONE != 0)
         && (protocol & (llmnr_protocol_mask() | mdns_protocol_mask()) != 0)
     {
         return false;
@@ -74,48 +74,48 @@ pub const fn request_protocol_enabled(flags: u64, protocol: u64) -> bool {
 }
 
 const fn resolver_protocol_mask() -> u64 {
-    use crate::dbus_resolve1_abi::flags::{
-        SD_RESOLVED_DNS, SD_RESOLVED_LLMNR_IPV4, SD_RESOLVED_LLMNR_IPV6, SD_RESOLVED_MDNS_IPV4,
-        SD_RESOLVED_MDNS_IPV6,
+    use crate::resolve_flags::flags::{
+        RUSTD_RESOLVE_DNS, RUSTD_RESOLVE_LLMNR_IPV4, RUSTD_RESOLVE_LLMNR_IPV6, RUSTD_RESOLVE_MDNS_IPV4,
+        RUSTD_RESOLVE_MDNS_IPV6,
     };
-    SD_RESOLVED_DNS
-        | SD_RESOLVED_LLMNR_IPV4
-        | SD_RESOLVED_LLMNR_IPV6
-        | SD_RESOLVED_MDNS_IPV4
-        | SD_RESOLVED_MDNS_IPV6
+    RUSTD_RESOLVE_DNS
+        | RUSTD_RESOLVE_LLMNR_IPV4
+        | RUSTD_RESOLVE_LLMNR_IPV6
+        | RUSTD_RESOLVE_MDNS_IPV4
+        | RUSTD_RESOLVE_MDNS_IPV6
 }
 
 const fn llmnr_protocol_mask() -> u64 {
-    crate::dbus_resolve1_abi::flags::SD_RESOLVED_LLMNR_IPV4
-        | crate::dbus_resolve1_abi::flags::SD_RESOLVED_LLMNR_IPV6
+    crate::resolve_flags::flags::RUSTD_RESOLVE_LLMNR_IPV4
+        | crate::resolve_flags::flags::RUSTD_RESOLVE_LLMNR_IPV6
 }
 
 const fn mdns_protocol_mask() -> u64 {
-    crate::dbus_resolve1_abi::flags::SD_RESOLVED_MDNS_IPV4
-        | crate::dbus_resolve1_abi::flags::SD_RESOLVED_MDNS_IPV6
+    crate::resolve_flags::flags::RUSTD_RESOLVE_MDNS_IPV4
+        | crate::resolve_flags::flags::RUSTD_RESOLVE_MDNS_IPV6
 }
 
 pub const fn query_flags_are_valid(flags: u64, method_flags: u64) -> bool {
-    use crate::dbus_resolve1_abi::flags::{
-        SD_RESOLVED_AUTHENTICATED, SD_RESOLVED_CONFIDENTIAL,
-        SD_RESOLVED_NO_CACHE, SD_RESOLVED_NO_CNAME, SD_RESOLVED_NO_NETWORK, SD_RESOLVED_NO_STALE,
-        SD_RESOLVED_NO_SYNTHESIZE, SD_RESOLVED_NO_TRUST_ANCHOR, SD_RESOLVED_NO_VALIDATE,
-        SD_RESOLVED_NO_ZONE, SD_RESOLVED_RELAX_SINGLE_LABEL,
-        SD_RESOLVED_SYNTHETIC,
+    use crate::resolve_flags::flags::{
+        RUSTD_RESOLVE_AUTHENTICATED, RUSTD_RESOLVE_CONFIDENTIAL,
+        RUSTD_RESOLVE_NO_CACHE, RUSTD_RESOLVE_NO_CNAME, RUSTD_RESOLVE_NO_NETWORK, RUSTD_RESOLVE_NO_STALE,
+        RUSTD_RESOLVE_NO_SYNTHESIZE, RUSTD_RESOLVE_NO_TRUST_ANCHOR, RUSTD_RESOLVE_NO_VALIDATE,
+        RUSTD_RESOLVE_NO_ZONE, RUSTD_RESOLVE_RELAX_SINGLE_LABEL,
+        RUSTD_RESOLVE_SYNTHETIC,
     };
     let common = resolver_protocol_mask()
-        | SD_RESOLVED_NO_CNAME
-        | SD_RESOLVED_NO_VALIDATE
-        | SD_RESOLVED_NO_SYNTHESIZE
-        | SD_RESOLVED_NO_CACHE
-        | SD_RESOLVED_NO_ZONE
-        | SD_RESOLVED_NO_TRUST_ANCHOR
-        | SD_RESOLVED_NO_NETWORK
-        | SD_RESOLVED_NO_STALE
-        | SD_RESOLVED_RELAX_SINGLE_LABEL
-        | SD_RESOLVED_AUTHENTICATED
-        | SD_RESOLVED_CONFIDENTIAL
-        | SD_RESOLVED_SYNTHETIC;
+        | RUSTD_RESOLVE_NO_CNAME
+        | RUSTD_RESOLVE_NO_VALIDATE
+        | RUSTD_RESOLVE_NO_SYNTHESIZE
+        | RUSTD_RESOLVE_NO_CACHE
+        | RUSTD_RESOLVE_NO_ZONE
+        | RUSTD_RESOLVE_NO_TRUST_ANCHOR
+        | RUSTD_RESOLVE_NO_NETWORK
+        | RUSTD_RESOLVE_NO_STALE
+        | RUSTD_RESOLVE_RELAX_SINGLE_LABEL
+        | RUSTD_RESOLVE_AUTHENTICATED
+        | RUSTD_RESOLVE_CONFIDENTIAL
+        | RUSTD_RESOLVE_SYNTHETIC;
     flags & !(common | method_flags) == 0
 }
 
@@ -146,36 +146,36 @@ pub struct AddressLookup {
 }
 
 pub fn response_protocol_flags(response: &[u8]) -> u64 {
-    use crate::dbus_resolve1_abi::flags::{
-        SD_RESOLVED_DNS, SD_RESOLVED_LLMNR_IPV4, SD_RESOLVED_LLMNR_IPV6, SD_RESOLVED_MDNS_IPV4,
-        SD_RESOLVED_MDNS_IPV6,
+    use crate::resolve_flags::flags::{
+        RUSTD_RESOLVE_DNS, RUSTD_RESOLVE_LLMNR_IPV4, RUSTD_RESOLVE_LLMNR_IPV6, RUSTD_RESOLVE_MDNS_IPV4,
+        RUSTD_RESOLVE_MDNS_IPV6,
     };
 
     let Ok(header) = Header::parse(response) else {
-        return SD_RESOLVED_DNS;
+        return RUSTD_RESOLVE_DNS;
     };
     if header.flags & 0x0080 != 0 {
-        return SD_RESOLVED_DNS;
+        return RUSTD_RESOLVE_DNS;
     }
     let Ok(question) = first_question(response) else {
-        return SD_RESOLVED_DNS;
+        return RUSTD_RESOLVE_DNS;
     };
     let name = question.name.text().to_ascii_lowercase();
     if crate::mdns::runtime::should_handle_name(&name) {
         return response_family_protocol_flags(
             response,
-            SD_RESOLVED_MDNS_IPV4,
-            SD_RESOLVED_MDNS_IPV6,
+            RUSTD_RESOLVE_MDNS_IPV4,
+            RUSTD_RESOLVE_MDNS_IPV6,
         );
     }
     if !name.contains('.') || name.ends_with(".in-addr.arpa") || name.ends_with(".ip6.arpa") {
         return response_family_protocol_flags(
             response,
-            SD_RESOLVED_LLMNR_IPV4,
-            SD_RESOLVED_LLMNR_IPV6,
+            RUSTD_RESOLVE_LLMNR_IPV4,
+            RUSTD_RESOLVE_LLMNR_IPV6,
         );
     }
-    SD_RESOLVED_DNS
+    RUSTD_RESOLVE_DNS
 }
 
 fn response_family_protocol_flags(packet: &[u8], ipv4_flag: u64, ipv6_flag: u64) -> u64 {
@@ -193,91 +193,91 @@ fn response_family_protocol_flags(packet: &[u8], ipv4_flag: u64, ipv6_flag: u64)
 }
 
 fn synthetic_response_flags(request_flags: u64, query: &[u8]) -> u64 {
-    use crate::dbus_resolve1_abi::flags::{
-        SD_RESOLVED_AUTHENTICATED, SD_RESOLVED_CONFIDENTIAL, SD_RESOLVED_SYNTHETIC,
+    use crate::resolve_flags::flags::{
+        RUSTD_RESOLVE_AUTHENTICATED, RUSTD_RESOLVE_CONFIDENTIAL, RUSTD_RESOLVE_SYNTHETIC,
     };
 
     synthesized_protocol_flags(request_flags, query)
-        | SD_RESOLVED_AUTHENTICATED
-        | SD_RESOLVED_CONFIDENTIAL
-        | SD_RESOLVED_SYNTHETIC
+        | RUSTD_RESOLVE_AUTHENTICATED
+        | RUSTD_RESOLVE_CONFIDENTIAL
+        | RUSTD_RESOLVE_SYNTHETIC
 }
 
 const fn dns_response_flags() -> u64 {
-    crate::dbus_resolve1_abi::flags::SD_RESOLVED_DNS
+    crate::resolve_flags::flags::RUSTD_RESOLVE_DNS
 }
 
 fn hook_response_flags(request_flags: u64, query: &[u8]) -> u64 {
     synthesized_protocol_flags(request_flags, query)
-        | crate::dbus_resolve1_abi::flags::SD_RESOLVED_FROM_HOOK
+        | crate::resolve_flags::flags::RUSTD_RESOLVE_FROM_HOOK
 }
 
 fn synthesized_protocol_flags(request_flags: u64, query: &[u8]) -> u64 {
     if request_protocol_enabled(
         request_flags,
-        crate::dbus_resolve1_abi::flags::SD_RESOLVED_DNS,
+        crate::resolve_flags::flags::RUSTD_RESOLVE_DNS,
     ) {
         return dns_response_flags();
     }
     if request_flags & llmnr_protocol_mask() != 0 {
         return response_family_protocol_flags(
             query,
-            crate::dbus_resolve1_abi::flags::SD_RESOLVED_LLMNR_IPV4,
-            crate::dbus_resolve1_abi::flags::SD_RESOLVED_LLMNR_IPV6,
+            crate::resolve_flags::flags::RUSTD_RESOLVE_LLMNR_IPV4,
+            crate::resolve_flags::flags::RUSTD_RESOLVE_LLMNR_IPV6,
         );
     }
     response_family_protocol_flags(
         query,
-        crate::dbus_resolve1_abi::flags::SD_RESOLVED_MDNS_IPV4,
-        crate::dbus_resolve1_abi::flags::SD_RESOLVED_MDNS_IPV6,
+        crate::resolve_flags::flags::RUSTD_RESOLVE_MDNS_IPV4,
+        crate::resolve_flags::flags::RUSTD_RESOLVE_MDNS_IPV6,
     )
 }
 
 fn cache_response_flags(response: &[u8]) -> u64 {
     authenticated_response_flag(response)
         | dns_response_flags()
-        | crate::dbus_resolve1_abi::flags::SD_RESOLVED_FROM_CACHE
+        | crate::resolve_flags::flags::RUSTD_RESOLVE_FROM_CACHE
 }
 
 fn dns_network_response_flags(response: &[u8]) -> u64 {
     authenticated_response_flag(response)
         | dns_response_flags()
-        | crate::dbus_resolve1_abi::flags::SD_RESOLVED_FROM_NETWORK
+        | crate::resolve_flags::flags::RUSTD_RESOLVE_FROM_NETWORK
 }
 
 fn authenticated_response_flag(response: &[u8]) -> u64 {
     if matches!(Header::parse(response), Ok(header) if header.authentic_data()) {
-        crate::dbus_resolve1_abi::flags::SD_RESOLVED_AUTHENTICATED
+        crate::resolve_flags::flags::RUSTD_RESOLVE_AUTHENTICATED
     } else {
         0
     }
 }
 
 fn mdns_response_flags(query: &[u8], from_cache: bool) -> u64 {
-    use crate::dbus_resolve1_abi::flags::{
-        SD_RESOLVED_FROM_CACHE, SD_RESOLVED_FROM_NETWORK, SD_RESOLVED_MDNS_IPV4,
-        SD_RESOLVED_MDNS_IPV6,
+    use crate::resolve_flags::flags::{
+        RUSTD_RESOLVE_FROM_CACHE, RUSTD_RESOLVE_FROM_NETWORK, RUSTD_RESOLVE_MDNS_IPV4,
+        RUSTD_RESOLVE_MDNS_IPV6,
     };
 
-    response_family_protocol_flags(query, SD_RESOLVED_MDNS_IPV4, SD_RESOLVED_MDNS_IPV6)
+    response_family_protocol_flags(query, RUSTD_RESOLVE_MDNS_IPV4, RUSTD_RESOLVE_MDNS_IPV6)
         | if from_cache {
-            SD_RESOLVED_FROM_CACHE
+            RUSTD_RESOLVE_FROM_CACHE
         } else {
-            SD_RESOLVED_FROM_NETWORK
+            RUSTD_RESOLVE_FROM_NETWORK
         }
 }
 
 fn llmnr_response_flags(query: &[u8], from_cache: bool) -> u64 {
-    use crate::dbus_resolve1_abi::flags::{
-        SD_RESOLVED_FROM_CACHE, SD_RESOLVED_FROM_NETWORK, SD_RESOLVED_LLMNR_IPV4,
-        SD_RESOLVED_LLMNR_IPV6,
+    use crate::resolve_flags::flags::{
+        RUSTD_RESOLVE_FROM_CACHE, RUSTD_RESOLVE_FROM_NETWORK, RUSTD_RESOLVE_LLMNR_IPV4,
+        RUSTD_RESOLVE_LLMNR_IPV6,
     };
 
-    response_family_protocol_flags(query, SD_RESOLVED_LLMNR_IPV4, SD_RESOLVED_LLMNR_IPV6)
+    response_family_protocol_flags(query, RUSTD_RESOLVE_LLMNR_IPV4, RUSTD_RESOLVE_LLMNR_IPV6)
         | if from_cache {
-            SD_RESOLVED_FROM_CACHE
+            RUSTD_RESOLVE_FROM_CACHE
         } else {
-            SD_RESOLVED_FROM_NETWORK
+            RUSTD_RESOLVE_FROM_NETWORK
         }
 }
 
@@ -290,28 +290,28 @@ pub(crate) fn merge_parallel_response_flags(previous: Option<u64>, current: u64)
 }
 
 fn merge_response_flags(previous: Option<u64>, current: u64, union_protocols: bool) -> u64 {
-    use crate::dbus_resolve1_abi::flags::{
-        SD_RESOLVED_AUTHENTICATED, SD_RESOLVED_CONFIDENTIAL, SD_RESOLVED_DNS,
-        SD_RESOLVED_FROM_CACHE, SD_RESOLVED_FROM_HOOK, SD_RESOLVED_FROM_NETWORK,
-        SD_RESOLVED_FROM_TRUST_ANCHOR, SD_RESOLVED_FROM_ZONE, SD_RESOLVED_LLMNR_IPV4,
-        SD_RESOLVED_LLMNR_IPV6, SD_RESOLVED_MDNS_IPV4, SD_RESOLVED_MDNS_IPV6,
-        SD_RESOLVED_SYNTHETIC,
+    use crate::resolve_flags::flags::{
+        RUSTD_RESOLVE_AUTHENTICATED, RUSTD_RESOLVE_CONFIDENTIAL, RUSTD_RESOLVE_DNS,
+        RUSTD_RESOLVE_FROM_CACHE, RUSTD_RESOLVE_FROM_HOOK, RUSTD_RESOLVE_FROM_NETWORK,
+        RUSTD_RESOLVE_FROM_TRUST_ANCHOR, RUSTD_RESOLVE_FROM_ZONE, RUSTD_RESOLVE_LLMNR_IPV4,
+        RUSTD_RESOLVE_LLMNR_IPV6, RUSTD_RESOLVE_MDNS_IPV4, RUSTD_RESOLVE_MDNS_IPV6,
+        RUSTD_RESOLVE_SYNTHETIC,
     };
 
     let Some(previous) = previous else {
         return current;
     };
-    let protocols = SD_RESOLVED_DNS
-        | SD_RESOLVED_LLMNR_IPV4
-        | SD_RESOLVED_LLMNR_IPV6
-        | SD_RESOLVED_MDNS_IPV4
-        | SD_RESOLVED_MDNS_IPV6;
-    let sources = SD_RESOLVED_FROM_CACHE
-        | SD_RESOLVED_FROM_ZONE
-        | SD_RESOLVED_FROM_TRUST_ANCHOR
-        | SD_RESOLVED_FROM_NETWORK
-        | SD_RESOLVED_FROM_HOOK;
-    let qualities = SD_RESOLVED_AUTHENTICATED | SD_RESOLVED_CONFIDENTIAL | SD_RESOLVED_SYNTHETIC;
+    let protocols = RUSTD_RESOLVE_DNS
+        | RUSTD_RESOLVE_LLMNR_IPV4
+        | RUSTD_RESOLVE_LLMNR_IPV6
+        | RUSTD_RESOLVE_MDNS_IPV4
+        | RUSTD_RESOLVE_MDNS_IPV6;
+    let sources = RUSTD_RESOLVE_FROM_CACHE
+        | RUSTD_RESOLVE_FROM_ZONE
+        | RUSTD_RESOLVE_FROM_TRUST_ANCHOR
+        | RUSTD_RESOLVE_FROM_NETWORK
+        | RUSTD_RESOLVE_FROM_HOOK;
+    let qualities = RUSTD_RESOLVE_AUTHENTICATED | RUSTD_RESOLVE_CONFIDENTIAL | RUSTD_RESOLVE_SYNTHETIC;
     let protocol_flags = if union_protocols {
         (previous | current) & protocols
     } else {
@@ -323,9 +323,9 @@ fn merge_response_flags(previous: Option<u64>, current: u64, union_protocols: bo
 #[cfg(test)]
 mod response_protocol_flag_tests {
     use super::*;
-    use crate::dbus_resolve1_abi::flags::{
-        SD_RESOLVED_DNS, SD_RESOLVED_FROM_CACHE, SD_RESOLVED_FROM_NETWORK, SD_RESOLVED_LLMNR_IPV4,
-        SD_RESOLVED_LLMNR_IPV6, SD_RESOLVED_MDNS_IPV4, SD_RESOLVED_MDNS_IPV6,
+    use crate::resolve_flags::flags::{
+        RUSTD_RESOLVE_DNS, RUSTD_RESOLVE_FROM_CACHE, RUSTD_RESOLVE_FROM_NETWORK, RUSTD_RESOLVE_LLMNR_IPV4,
+        RUSTD_RESOLVE_LLMNR_IPV6, RUSTD_RESOLVE_MDNS_IPV4, RUSTD_RESOLVE_MDNS_IPV6,
     };
     use crate::wire::LocalRecord;
 
@@ -345,53 +345,53 @@ mod response_protocol_flag_tests {
     fn identifies_dns_llmnr_and_mdns_protocols() {
         assert_eq!(
             response_protocol_flags(&response("example.test", TYPE_A, 0x8080)),
-            SD_RESOLVED_DNS
+            RUSTD_RESOLVE_DNS
         );
         assert_eq!(
             response_protocol_flags(&response("example.test", TYPE_A, 0x80a0)),
-            SD_RESOLVED_DNS
+            RUSTD_RESOLVE_DNS
         );
         assert_eq!(
             response_protocol_flags(&response("printer", TYPE_A, 0x8000)),
-            SD_RESOLVED_LLMNR_IPV4
+            RUSTD_RESOLVE_LLMNR_IPV4
         );
         assert_eq!(
             response_protocol_flags(&response("printer", TYPE_AAAA, 0x8000)),
-            SD_RESOLVED_LLMNR_IPV6
+            RUSTD_RESOLVE_LLMNR_IPV6
         );
         assert_eq!(
             response_protocol_flags(&response("printer.local", TYPE_A, 0x8400)),
-            SD_RESOLVED_MDNS_IPV4
+            RUSTD_RESOLVE_MDNS_IPV4
         );
         let reverse = response("1.0.0.127.in-addr.arpa", TYPE_PTR, 0x8400);
         assert_eq!(
             mdns_response_flags(&reverse, false),
-            SD_RESOLVED_MDNS_IPV4 | SD_RESOLVED_FROM_NETWORK
+            RUSTD_RESOLVE_MDNS_IPV4 | RUSTD_RESOLVE_FROM_NETWORK
         );
         assert_eq!(
             mdns_response_flags(&reverse, true),
-            SD_RESOLVED_MDNS_IPV4 | SD_RESOLVED_FROM_CACHE
+            RUSTD_RESOLVE_MDNS_IPV4 | RUSTD_RESOLVE_FROM_CACHE
         );
         assert_eq!(
             llmnr_response_flags(&reverse, false),
-            SD_RESOLVED_LLMNR_IPV4 | SD_RESOLVED_FROM_NETWORK
+            RUSTD_RESOLVE_LLMNR_IPV4 | RUSTD_RESOLVE_FROM_NETWORK
         );
         assert_eq!(
             llmnr_response_flags(&reverse, true),
-            SD_RESOLVED_LLMNR_IPV4 | SD_RESOLVED_FROM_CACHE
+            RUSTD_RESOLVE_LLMNR_IPV4 | RUSTD_RESOLVE_FROM_CACHE
         );
         let service = response("_ipp._tcp.local", 12, 0x8400);
         assert_eq!(
             mdns_response_flags(&service, false),
-            SD_RESOLVED_MDNS_IPV4 | SD_RESOLVED_MDNS_IPV6 | SD_RESOLVED_FROM_NETWORK
+            RUSTD_RESOLVE_MDNS_IPV4 | RUSTD_RESOLVE_MDNS_IPV6 | RUSTD_RESOLVE_FROM_NETWORK
         );
     }
 
     #[test]
     fn merges_sources_without_overclaiming_answer_quality() {
-        use crate::dbus_resolve1_abi::flags::{
-            SD_RESOLVED_AUTHENTICATED, SD_RESOLVED_CONFIDENTIAL, SD_RESOLVED_FROM_CACHE,
-            SD_RESOLVED_SYNTHETIC,
+        use crate::resolve_flags::flags::{
+            RUSTD_RESOLVE_AUTHENTICATED, RUSTD_RESOLVE_CONFIDENTIAL, RUSTD_RESOLVE_FROM_CACHE,
+            RUSTD_RESOLVE_SYNTHETIC,
         };
 
         let query = make_query("localhost", TYPE_A, 7).expect("query");
@@ -400,22 +400,22 @@ mod response_protocol_flag_tests {
         let redirected = merge_redirect_response_flags(Some(synthetic), network);
         assert_eq!(redirected, network);
 
-        let cached = SD_RESOLVED_DNS | SD_RESOLVED_FROM_CACHE;
+        let cached = RUSTD_RESOLVE_DNS | RUSTD_RESOLVE_FROM_CACHE;
         let mixed = merge_redirect_response_flags(Some(cached), network);
         assert_eq!(
             mixed,
-            SD_RESOLVED_DNS | SD_RESOLVED_FROM_CACHE | SD_RESOLVED_FROM_NETWORK
+            RUSTD_RESOLVE_DNS | RUSTD_RESOLVE_FROM_CACHE | RUSTD_RESOLVE_FROM_NETWORK
         );
 
-        let mdns_v4 = SD_RESOLVED_MDNS_IPV4
-            | SD_RESOLVED_FROM_NETWORK
-            | SD_RESOLVED_AUTHENTICATED
-            | SD_RESOLVED_CONFIDENTIAL
-            | SD_RESOLVED_SYNTHETIC;
-        let mdns_v6 = SD_RESOLVED_MDNS_IPV6 | SD_RESOLVED_FROM_NETWORK;
+        let mdns_v4 = RUSTD_RESOLVE_MDNS_IPV4
+            | RUSTD_RESOLVE_FROM_NETWORK
+            | RUSTD_RESOLVE_AUTHENTICATED
+            | RUSTD_RESOLVE_CONFIDENTIAL
+            | RUSTD_RESOLVE_SYNTHETIC;
+        let mdns_v6 = RUSTD_RESOLVE_MDNS_IPV6 | RUSTD_RESOLVE_FROM_NETWORK;
         assert_eq!(
             merge_parallel_response_flags(Some(mdns_v4), mdns_v6),
-            SD_RESOLVED_MDNS_IPV4 | SD_RESOLVED_MDNS_IPV6 | SD_RESOLVED_FROM_NETWORK
+            RUSTD_RESOLVE_MDNS_IPV4 | RUSTD_RESOLVE_MDNS_IPV6 | RUSTD_RESOLVE_FROM_NETWORK
         );
     }
 }

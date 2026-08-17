@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod test_26_request_flags {
     use super::*;
-    use crate::dbus_resolve1_abi::flags::{
-        SD_RESOLVED_DNS, SD_RESOLVED_MDNS_IPV4, SD_RESOLVED_MDNS_IPV6,
-        SD_RESOLVED_NO_NETWORK, SD_RESOLVED_NO_SYNTHESIZE,
+    use crate::resolve_flags::flags::{
+        RUSTD_RESOLVE_DNS, RUSTD_RESOLVE_MDNS_IPV4, RUSTD_RESOLVE_MDNS_IPV6,
+        RUSTD_RESOLVE_NO_NETWORK, RUSTD_RESOLVE_NO_SYNTHESIZE,
     };
 
     #[test]
@@ -18,7 +18,7 @@ mod test_26_request_flags {
                 &query,
                 QueryMode::Full,
                 None,
-                SD_RESOLVED_NO_SYNTHESIZE | SD_RESOLVED_NO_NETWORK,
+                RUSTD_RESOLVE_NO_SYNTHESIZE | RUSTD_RESOLVE_NO_NETWORK,
             )
             .expect_err("synthesis and network are both disabled");
     }
@@ -32,7 +32,7 @@ mod test_26_request_flags {
                 &query,
                 QueryMode::Full,
                 None,
-                SD_RESOLVED_NO_NETWORK,
+                RUSTD_RESOLVE_NO_NETWORK,
             )
             .expect("synthetic response");
         assert_eq!(flags, synthetic_response_flags(0, &query));
@@ -43,7 +43,7 @@ mod test_26_request_flags {
         let resolver = Resolver::new(Config::default());
         let local = make_query("printer.local", TYPE_A, 0x7602).expect("mDNS query");
         assert!(matches!(
-            resolver.query_on_link_with_flags(&local, QueryMode::Full, None, SD_RESOLVED_DNS),
+            resolver.query_on_link_with_flags(&local, QueryMode::Full, None, RUSTD_RESOLVE_DNS),
             Err(ResolveError::NoSuchResourceRecord)
         ));
 
@@ -53,7 +53,7 @@ mod test_26_request_flags {
                 &dns,
                 QueryMode::Full,
                 None,
-                SD_RESOLVED_MDNS_IPV4 | SD_RESOLVED_MDNS_IPV6,
+                RUSTD_RESOLVE_MDNS_IPV4 | RUSTD_RESOLVE_MDNS_IPV6,
             ),
             Err(ResolveError::NoNameServers)
         ));
@@ -71,7 +71,7 @@ mod test_26_request_flags {
             wire::CLASS_IN,
             TYPE_A,
             None,
-            SD_RESOLVED_MDNS_IPV4 | SD_RESOLVED_NO_NETWORK,
+            RUSTD_RESOLVE_MDNS_IPV4 | RUSTD_RESOLVE_NO_NETWORK,
         );
         assert!(matches!(result, Err(ResolveError::NoSuchResourceRecord)));
     }
@@ -85,23 +85,23 @@ mod test_26_request_flags {
                 &query,
                 QueryMode::Full,
                 None,
-                crate::dbus_resolve1_abi::flags::SD_RESOLVED_LLMNR_IPV4,
+                crate::resolve_flags::flags::RUSTD_RESOLVE_LLMNR_IPV4,
             )
             .expect("LLMNR-labelled synthetic response");
-        assert_ne!(flags & crate::dbus_resolve1_abi::flags::SD_RESOLVED_LLMNR_IPV4, 0);
-        assert_eq!(flags & SD_RESOLVED_DNS, 0);
+        assert_ne!(flags & crate::resolve_flags::flags::RUSTD_RESOLVE_LLMNR_IPV4, 0);
+        assert_eq!(flags & RUSTD_RESOLVE_DNS, 0);
     }
 
     #[test]
     fn output_only_flags_are_rejected() {
         assert!(query_flags_are_valid(0, 0));
         assert!(!query_flags_are_valid(
-            crate::dbus_resolve1_abi::flags::SD_RESOLVED_FROM_NETWORK,
+            crate::resolve_flags::flags::RUSTD_RESOLVE_FROM_NETWORK,
             0
         ));
         assert!(!query_flags_are_valid(
-            crate::dbus_resolve1_abi::flags::SD_RESOLVED_REQUIRE_PRIMARY
-                | crate::dbus_resolve1_abi::flags::SD_RESOLVED_CLAMP_TTL,
+            crate::resolve_flags::flags::RUSTD_RESOLVE_REQUIRE_PRIMARY
+                | crate::resolve_flags::flags::RUSTD_RESOLVE_CLAMP_TTL,
             0
         ));
     }

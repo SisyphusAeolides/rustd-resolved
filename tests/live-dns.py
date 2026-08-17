@@ -247,9 +247,10 @@ def validate_native_varlink(path: Path) -> None:
     missing = required.difference(interfaces)
     if missing:
         raise AssertionError(f"native Varlink interfaces are missing: {sorted(missing)!r}")
-    legacy = [name for name in interfaces if isinstance(name, str) and name.startswith("io.systemd")]
-    if legacy:
-        raise AssertionError(f"public Varlink endpoint advertised legacy interfaces: {legacy!r}")
+    allowed = {"io.rustd", "io.rustd.Resolve", "io.rustd.service", "org.varlink.service"}
+    unexpected = set(interfaces).difference(allowed)
+    if unexpected:
+        raise AssertionError(f"public Varlink endpoint advertised unexpected interfaces: {sorted(unexpected)!r}")
 
     description_reply = varlink_call(
         path,
@@ -259,8 +260,6 @@ def validate_native_varlink(path: Path) -> None:
     description = description_reply.get("parameters", {}).get("description")
     if not isinstance(description, str) or "interface io.rustd.Resolve" not in description:
         raise AssertionError(f"native Resolve interface description is missing: {description_reply!r}")
-    if "interface io.systemd.Resolve" in description:
-        raise AssertionError("native interface description leaked the legacy Resolve identity")
 
     lookup = varlink_call(
         path,

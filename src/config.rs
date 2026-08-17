@@ -4,7 +4,7 @@ use std::error::Error;
 use std::fmt;
 use std::fs;
 use std::io::{self, Read};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 

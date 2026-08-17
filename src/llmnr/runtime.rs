@@ -496,7 +496,7 @@ impl RuntimeSockets {
     fn synchronize(&mut self, resolver: &Resolver, addresses: &[native::AddressInfo]) {
         let mut ipv4 = BTreeSet::new();
         let mut ipv6 = BTreeSet::new();
-        for address in addresses.iter().filter(|address| usable_address(address)) {
+        for address in addresses.iter().filter(usable_address) {
             if !resolver.llmnr_resolve_enabled(Some(address.ifindex)) {
                 continue;
             }
@@ -641,7 +641,7 @@ fn tcp_client(mut stream: TcpStream, resolver: &Resolver, ipv6: bool) -> io::Res
     let addresses = native::address_snapshot()?;
     let Some(ifindex) = addresses
         .iter()
-        .filter(|address| usable_address(address))
+        .filter(usable_address)
         .find(|address| address.address == local.ip())
         .map(|address| address.ifindex)
         .filter(|ifindex| resolver.llmnr_respond_enabled(*ifindex))
@@ -1008,7 +1008,7 @@ fn query_candidates(
 ) -> BTreeSet<(bool, i32)> {
     addresses
         .iter()
-        .filter(|address| usable_address(address))
+        .filter(usable_address)
         .filter(|address| requested_ifindex.map_or(true, |value| value == address.ifindex))
         .filter(|address| resolver.llmnr_resolve_enabled(Some(address.ifindex)))
         .filter_map(|address| {

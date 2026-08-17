@@ -7,14 +7,12 @@
 formal/idris/build/
 
 nss/*.o
-nss/libnss_resolve.so.2
+nss/libnss_rustd_dns.so.2
 nss/test_nss
 nss/test_shm
 *.so
 *.so.*
 
-nss/*.o
-nss/libnss_resolve.so.2
 target/
 **/*.tmp
 fuzz/artifacts/

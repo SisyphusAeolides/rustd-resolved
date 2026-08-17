@@ -73,11 +73,7 @@ pub fn name_to_wire_lower(name: &str) -> Result<Vec<u8>, NssBackendError> {
         }
         out.push(lab.len() as u8);
         for b in lab.bytes() {
-            let c = if (b'A'..=b'Z').contains(&b) {
-                b + 32
-            } else {
-                b
-            };
+            let c = if b.is_ascii_uppercase() { b + 32 } else { b };
             out.push(c);
         }
     }

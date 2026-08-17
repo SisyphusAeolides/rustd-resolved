@@ -4,7 +4,6 @@ mod resolvectl_rr;
 use rustd_resolved::json::{self, JsonObject, Value};
 use std::env;
 use std::error::Error;
-use std::ffi::OsStr;
 use std::fmt;
 use std::io::IsTerminal as _;
 use std::io::{self, Read, Write};
@@ -13,14 +12,13 @@ use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
-use zbus::blocking::{Connection, Proxy};
 
 const DEFAULT_SOCKET: &str = "/run/rustd/resolve/io.rustd.Resolve";
 const DEFAULT_MONITOR_SOCKET: &str = "/run/rustd/resolve/io.rustd.Resolve.Monitor";
 const MAX_REPLY_SIZE: usize = 1024 * 1024;
 
-fn print_systemd_version() {
-    println!("{}", rustd_resolved::UPSTREAM_VERSION_BANNER);
+fn print_version() {
+    println!("rustd-resolvectl {}", rustd_resolved::VERSION);
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -28,13 +26,6 @@ enum RawMode {
     None,
     Payload,
     Packet,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum InvocationMode {
-    Native,
-    Resolvconf,
-    SystemdResolve,
 }
 
 #[derive(Debug)]
@@ -168,10 +159,8 @@ fn main() -> ExitCode {
 }
 
 fn execute() -> Result<(), Box<dyn Error>> {
-    let mut process_arguments = env::args_os();
-    let program = process_arguments.next().unwrap_or_default();
-    let invoked_as = env::var_os("SYSTEMD_INVOKED_AS");
-    let raw_arguments = process_arguments
+    let raw_arguments = env::args_os()
+        .skip(1)
         .map(|argument| {
             argument
                 .into_string()
@@ -179,56 +168,10 @@ fn execute() -> Result<(), Box<dyn Error>> {
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    match invocation_mode(&program, invoked_as.as_deref()) {
-        InvocationMode::Resolvconf => {
-            if raw_arguments
-                .iter()
-                .any(|argument| matches!(argument.as_str(), "-h" | "--help"))
-            {
-                print_resolvconf_help();
-                return Ok(());
-            }
-            if raw_arguments.iter().any(|argument| argument == "--version") {
-                print_systemd_version();
-                return Ok(());
-            }
-            let mut input = String::new();
-            if rustd_resolved::resolvectl_dbus::resolvconf_requires_input(&raw_arguments)? {
-                io::stdin()
-                    .take((MAX_REPLY_SIZE + 1) as u64)
-                    .read_to_string(&mut input)?;
-                if input.len() > MAX_REPLY_SIZE {
-                    return Err("resolvconf input exceeds the configured limit".into());
-                }
-            }
-            rustd_resolved::resolvectl_dbus::execute_resolvconf(&raw_arguments, &input)
-        }
-        InvocationMode::SystemdResolve => {
-            if raw_arguments
-                .iter()
-                .any(|argument| matches!(argument.as_str(), "-h" | "--help"))
-            {
-                print_systemd_resolve_help();
-                return Ok(());
-            }
-            if raw_arguments.iter().any(|argument| argument == "--version") {
-                print_systemd_version();
-                return Ok(());
-            }
-            for arguments in translate_systemd_resolve(raw_arguments)? {
-                if let Some(options) = parse_options(arguments)? {
-                    execute_options(&options)?;
-                }
-            }
-            Ok(())
-        }
-        InvocationMode::Native => {
-            let Some(options) = parse_options(raw_arguments)? else {
-                return Ok(());
-            };
-            execute_options(&options)
-        }
-    }
+    let Some(options) = parse_options(raw_arguments)? else {
+        return Ok(());
+    };
+    execute_options(&options)
 }
 
 fn execute_options(options: &Options) -> Result<(), Box<dyn Error>> {
@@ -248,7 +191,6 @@ fn execute_options(options: &Options) -> Result<(), Box<dyn Error>> {
             options.json.as_deref(),
             options.ask_password,
         ),
-        "log-level" => log_level(&options.arguments),
         "statistics" => statistics(
             &monitor_socket,
             options.json.as_deref(),
@@ -280,36 +222,21 @@ fn execute_options(options: &Options) -> Result<(), Box<dyn Error>> {
             options.ask_password,
         ),
         command
-            if rustd_resolved::resolvectl_dbus::is_command(command)
-                && options.arguments.is_empty() =>
+            if matches!(
+                command,
+                "dns"
+                    | "domain"
+                    | "default-route"
+                    | "llmnr"
+                    | "mdns"
+                    | "dnsovertls"
+                    | "dnssec"
+                    | "nta"
+            ) && options.arguments.is_empty() =>
         {
             show_configuration_field(&options.socket, command, options.json.as_deref())
         }
-        command if rustd_resolved::resolvectl_dbus::is_command(command) => {
-            rustd_resolved::resolvectl_dbus::execute(
-                command,
-                &options.arguments,
-                options.json.as_deref(),
-            )
-        }
         command => Err(format!("unknown command: {command}").into()),
-    }
-}
-
-fn invocation_mode(program: &OsStr, override_name: Option<&OsStr>) -> InvocationMode {
-    let effective = override_name
-        .filter(|name| !name.is_empty())
-        .unwrap_or(program);
-    let name = Path::new(effective)
-        .file_name()
-        .unwrap_or(effective)
-        .to_string_lossy();
-    if name.contains("resolvconf") {
-        InvocationMode::Resolvconf
-    } else if name.contains("systemd-resolve") {
-        InvocationMode::SystemdResolve
-    } else {
-        InvocationMode::Native
     }
 }
 
@@ -458,26 +385,6 @@ fn service_target_from_parameters(parameters: &Value) -> Option<String> {
     None
 }
 
-fn log_level(arguments: &[String]) -> Result<(), Box<dyn Error>> {
-    if arguments.len() > 1 {
-        return Err("log-level accepts at most one level".into());
-    }
-    let connection = Connection::system()?;
-    let proxy = Proxy::new(
-        &connection,
-        "org.freedesktop.resolve1",
-        "/org/freedesktop/LogControl1",
-        "org.freedesktop.LogControl1",
-    )?;
-    if let Some(level) = arguments.first() {
-        proxy.set_property("LogLevel", level)?;
-    } else {
-        let level: String = proxy.get_property("LogLevel")?;
-        println!("{level}");
-    }
-    Ok(())
-}
-
 fn monitor(
     socket: &Path,
     arguments: &[String],
@@ -613,264 +520,6 @@ fn monitor_socket_for(path: &Path) -> PathBuf {
     PathBuf::from(monitor)
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum CompatMode {
-    Query,
-    Service,
-    OpenPgp,
-    Tlsa,
-    Statistics,
-    ResetStatistics,
-    Status,
-    FlushCaches,
-    ResetServerFeatures,
-    SetLink,
-    RevertLink,
-}
-
-#[allow(clippy::too_many_lines)]
-fn translate_systemd_resolve(
-    raw_arguments: Vec<String>,
-) -> Result<Vec<Vec<String>>, Box<dyn Error>> {
-    let mut mode = CompatMode::Query;
-    let mut common = Vec::new();
-    let mut operands = Vec::new();
-    let mut interface = None;
-    let mut interface_index = 0;
-    let mut tlsa_family = None;
-    let mut set_dns = Vec::new();
-    let mut set_domain = Vec::new();
-    let mut set_nta = Vec::new();
-    let mut set_llmnr = None;
-    let mut set_mdns = None;
-    let mut set_dnsovertls = None;
-    let mut set_dnssec = None;
-    let mut saw_type = false;
-    let mut saw_class = false;
-    let mut arguments = raw_arguments.into_iter();
-
-    while let Some(argument) = arguments.next() {
-        if argument == "--" {
-            operands.extend(arguments);
-            break;
-        }
-        if matches!(argument.as_str(), "-h" | "--help" | "--version") {
-            return Ok(vec![vec![argument]]);
-        }
-
-        let (name, attached) = compat_option(&argument);
-        match name {
-            "-4" | "-6" | "--no-pager" => common.push(name.to_owned()),
-            "-i" | "--interface" => {
-                let value = compat_option_value(attached, &mut arguments, name)?;
-                let index = rustd_resolved::interface::resolve_ifindex(&value)?;
-                merge_ifindex(&mut interface_index, index)?;
-                interface = Some(value.clone());
-                common.push(format!("--interface={value}"));
-            }
-            "-p" | "--protocol" => {
-                let value = compat_option_value(attached, &mut arguments, name)?;
-                if value == "help" {
-                    return Ok(vec![vec![format!("--protocol={value}")]]);
-                }
-                protocol_flags(&value)?;
-                common.push(format!("--protocol={value}"));
-            }
-            "-t" | "--type" => {
-                let value = compat_option_value(attached, &mut arguments, name)?;
-                if value == "help" {
-                    return Ok(vec![vec![format!("--type={value}")]]);
-                }
-                parse_record_type(&value)?;
-                common.push(format!("--type={value}"));
-                saw_type = true;
-            }
-            "-c" | "--class" => {
-                let value = compat_option_value(attached, &mut arguments, name)?;
-                if value == "help" {
-                    return Ok(vec![vec![format!("--class={value}")]]);
-                }
-                parse_record_class(&value)?;
-                common.push(format!("--class={value}"));
-                saw_class = true;
-            }
-            "--service-address" | "--service-txt" | "--cname" | "--search" | "--legend" => {
-                let value = compat_option_value(attached, &mut arguments, name)?;
-                parse_yes_no(&value)?;
-                common.push(format!("{name}={value}"));
-            }
-            "--raw" => {
-                if io::stdout().is_terminal() {
-                    return Err("refusing to write binary data to a terminal".into());
-                }
-                if attached.is_some_and(|value| !matches!(value, "payload" | "packet")) {
-                    return Err(format!(
-                        "unknown --raw specifier: {}",
-                        attached.unwrap_or_default()
-                    )
-                    .into());
-                }
-                common.push(
-                    attached.map_or_else(|| "--raw".to_owned(), |value| format!("--raw={value}")),
-                );
-            }
-            "--service" if attached.is_none() => mode = CompatMode::Service,
-            "--openpgp" if attached.is_none() => mode = CompatMode::OpenPgp,
-            "--tlsa" => {
-                if let Some(value) = attached {
-                    if !matches!(value, "tcp" | "udp" | "sctp") {
-                        return Err(format!("unknown TLSA service family: {value}").into());
-                    }
-                    tlsa_family = Some(value.to_owned());
-                }
-                mode = CompatMode::Tlsa;
-            }
-            "--statistics" if attached.is_none() => mode = CompatMode::Statistics,
-            "--reset-statistics" if attached.is_none() => mode = CompatMode::ResetStatistics,
-            "--status" if attached.is_none() => mode = CompatMode::Status,
-            "--flush-caches" if attached.is_none() => mode = CompatMode::FlushCaches,
-            "--reset-server-features" if attached.is_none() => {
-                mode = CompatMode::ResetServerFeatures;
-            }
-            "--set-dns" => {
-                set_dns.push(compat_option_value(attached, &mut arguments, name)?);
-                mode = CompatMode::SetLink;
-            }
-            "--set-domain" => {
-                set_domain.push(compat_option_value(attached, &mut arguments, name)?);
-                mode = CompatMode::SetLink;
-            }
-            "--set-nta" => {
-                set_nta.push(compat_option_value(attached, &mut arguments, name)?);
-                mode = CompatMode::SetLink;
-            }
-            "--set-llmnr" => {
-                set_llmnr = Some(compat_option_value(attached, &mut arguments, name)?);
-                mode = CompatMode::SetLink;
-            }
-            "--set-mdns" => {
-                set_mdns = Some(compat_option_value(attached, &mut arguments, name)?);
-                mode = CompatMode::SetLink;
-            }
-            "--set-dnsovertls" => {
-                set_dnsovertls = Some(compat_option_value(attached, &mut arguments, name)?);
-                mode = CompatMode::SetLink;
-            }
-            "--set-dnssec" => {
-                set_dnssec = Some(compat_option_value(attached, &mut arguments, name)?);
-                mode = CompatMode::SetLink;
-            }
-            "--revert" if attached.is_none() => mode = CompatMode::RevertLink,
-            value if value.starts_with('-') => {
-                return Err(format!("unknown systemd-resolve option: {argument}").into());
-            }
-            _ => operands.push(argument),
-        }
-    }
-
-    if mode == CompatMode::Service && saw_type {
-        return Err("--service and --type may not be combined".into());
-    }
-    if saw_class && !saw_type {
-        return Err("--class may only be used together with --type".into());
-    }
-
-    let simple = |command: &str, arguments: Vec<String>| {
-        let mut translated = common.clone();
-        translated.push(command.to_owned());
-        translated.extend(arguments);
-        vec![translated]
-    };
-    Ok(match mode {
-        CompatMode::Query => simple("query", operands),
-        CompatMode::Service => simple("service", operands),
-        CompatMode::OpenPgp => simple("openpgp", operands),
-        CompatMode::Tlsa => {
-            let mut arguments = Vec::new();
-            arguments.extend(tlsa_family);
-            arguments.extend(operands);
-            simple("tlsa", arguments)
-        }
-        CompatMode::Statistics => simple("statistics", Vec::new()),
-        CompatMode::ResetStatistics => simple("reset-statistics", Vec::new()),
-        CompatMode::Status => {
-            if operands.is_empty() {
-                operands.extend(interface.clone());
-            }
-            simple("status", operands)
-        }
-        CompatMode::FlushCaches => simple("flush-caches", Vec::new()),
-        CompatMode::ResetServerFeatures => simple("reset-server-features", Vec::new()),
-        CompatMode::RevertLink => {
-            let interface = interface.ok_or("--revert requires --interface")?;
-            vec![vec!["revert".to_owned(), interface]]
-        }
-        CompatMode::SetLink => {
-            let interface = interface.ok_or("link setters require --interface")?;
-            let mut plans = Vec::new();
-            push_link_plan(&mut plans, "dns", &interface, set_dns);
-            push_link_plan(&mut plans, "domain", &interface, set_domain);
-            push_link_plan(&mut plans, "nta", &interface, set_nta);
-            push_optional_link_plan(&mut plans, "llmnr", &interface, set_llmnr);
-            push_optional_link_plan(&mut plans, "mdns", &interface, set_mdns);
-            push_optional_link_plan(&mut plans, "dnsovertls", &interface, set_dnsovertls);
-            push_optional_link_plan(&mut plans, "dnssec", &interface, set_dnssec);
-            plans
-        }
-    })
-}
-
-fn compat_option(argument: &str) -> (&str, Option<&str>) {
-    if let Some((name, value)) = argument.split_once('=') {
-        return (name, Some(value));
-    }
-    for name in ["-i", "-p", "-t", "-c"] {
-        if let Some(value) = argument
-            .strip_prefix(name)
-            .filter(|value| !value.is_empty())
-        {
-            return (name, Some(value));
-        }
-    }
-    (argument, None)
-}
-
-fn compat_option_value(
-    attached: Option<&str>,
-    arguments: &mut impl Iterator<Item = String>,
-    option: &str,
-) -> Result<String, Box<dyn Error>> {
-    let value = attached.map(str::to_owned).or_else(|| arguments.next());
-    match value {
-        Some(value) if !value.is_empty() => Ok(value),
-        _ => Err(format!("{option} requires a value").into()),
-    }
-}
-
-fn push_link_plan(
-    plans: &mut Vec<Vec<String>>,
-    command: &str,
-    interface: &str,
-    values: Vec<String>,
-) {
-    if !values.is_empty() {
-        let mut plan = vec![command.to_owned(), interface.to_owned()];
-        plan.extend(values);
-        plans.push(plan);
-    }
-}
-
-fn push_optional_link_plan(
-    plans: &mut Vec<Vec<String>>,
-    command: &str,
-    interface: &str,
-    value: Option<String>,
-) {
-    if let Some(value) = value {
-        plans.push(vec![command.to_owned(), interface.to_owned(), value]);
-    }
-}
-
 fn merge_ifindex(current: &mut i32, new: i32) -> Result<(), Box<dyn Error>> {
     if *current > 0 && *current != new {
         return Err("multiple different interfaces were specified".into());
@@ -997,73 +646,73 @@ fn parse_options(raw_arguments: Vec<String>) -> Result<Option<Options>, Box<dyn 
             }
             "--service-address" => set_disabled_flag(
                 &mut request_flags,
-                rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_NO_ADDRESS,
+                rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_NO_ADDRESS,
                 name,
                 &option_value(inline_value, &mut arguments, name)?,
             )?,
             "--service-txt" => set_disabled_flag(
                 &mut request_flags,
-                rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_NO_TXT,
+                rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_NO_TXT,
                 name,
                 &option_value(inline_value, &mut arguments, name)?,
             )?,
             "--cname" => set_disabled_flag(
                 &mut request_flags,
-                rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_NO_CNAME,
+                rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_NO_CNAME,
                 name,
                 &option_value(inline_value, &mut arguments, name)?,
             )?,
             "--validate" => set_disabled_flag(
                 &mut request_flags,
-                rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_NO_VALIDATE,
+                rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_NO_VALIDATE,
                 name,
                 &option_value(inline_value, &mut arguments, name)?,
             )?,
             "--synthesize" => set_disabled_flag(
                 &mut request_flags,
-                rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_NO_SYNTHESIZE,
+                rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_NO_SYNTHESIZE,
                 name,
                 &option_value(inline_value, &mut arguments, name)?,
             )?,
             "--cache" => set_disabled_flag(
                 &mut request_flags,
-                rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_NO_CACHE,
+                rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_NO_CACHE,
                 name,
                 &option_value(inline_value, &mut arguments, name)?,
             )?,
             "--stale-data" => set_disabled_flag(
                 &mut request_flags,
-                rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_NO_STALE,
+                rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_NO_STALE,
                 name,
                 &option_value(inline_value, &mut arguments, name)?,
             )?,
             "--zone" => set_disabled_flag(
                 &mut request_flags,
-                rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_NO_ZONE,
+                rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_NO_ZONE,
                 name,
                 &option_value(inline_value, &mut arguments, name)?,
             )?,
             "--trust-anchor" => set_disabled_flag(
                 &mut request_flags,
-                rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_NO_TRUST_ANCHOR,
+                rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_NO_TRUST_ANCHOR,
                 name,
                 &option_value(inline_value, &mut arguments, name)?,
             )?,
             "--network" => set_disabled_flag(
                 &mut request_flags,
-                rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_NO_NETWORK,
+                rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_NO_NETWORK,
                 name,
                 &option_value(inline_value, &mut arguments, name)?,
             )?,
             "--search" => set_disabled_flag(
                 &mut request_flags,
-                rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_NO_SEARCH,
+                rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_NO_SEARCH,
                 name,
                 &option_value(inline_value, &mut arguments, name)?,
             )?,
             "--relax-single-label" => set_enabled_flag(
                 &mut request_flags,
-                rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_RELAX_SINGLE_LABEL,
+                rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_RELAX_SINGLE_LABEL,
                 name,
                 &option_value(inline_value, &mut arguments, name)?,
             )?,
@@ -1097,7 +746,7 @@ fn parse_options(raw_arguments: Vec<String>) -> Result<Option<Options>, Box<dyn 
                 if inline_value.is_some() {
                     return Err("option '--version' doesn't allow an argument".into());
                 }
-                print_systemd_version();
+                print_version();
                 return Ok(None);
             }
             "--help" | "-h" => {
@@ -1314,14 +963,6 @@ fn parse_query_arguments(
     })
 }
 
-fn parse_yes_no(value: &str) -> Result<bool, Box<dyn Error>> {
-    match value.to_ascii_lowercase().as_str() {
-        "1" | "yes" | "y" | "true" | "t" | "on" => Ok(true),
-        "0" | "no" | "n" | "false" | "f" | "off" => Ok(false),
-        _ => Err(format!("invalid boolean value: {value}").into()),
-    }
-}
-
 fn parse_named_yes_no(option: &str, value: &str) -> Result<bool, Box<dyn Error>> {
     match value.to_ascii_lowercase().as_str() {
         "1" | "yes" | "y" | "true" | "t" | "on" => Ok(true),
@@ -1384,9 +1025,9 @@ fn option_value_with_empty_allowed(
 }
 
 fn protocol_flags(value: &str) -> Result<u64, Box<dyn Error>> {
-    use rustd_resolved::dbus_resolve1_abi::flags::{
-        SD_RESOLVED_DNS, SD_RESOLVED_LLMNR_IPV4, SD_RESOLVED_LLMNR_IPV6, SD_RESOLVED_MDNS_IPV4,
-        SD_RESOLVED_MDNS_IPV6,
+    use rustd_resolved::resolve_flags::flags::{
+        RUSTD_RESOLVE_DNS, RUSTD_RESOLVE_LLMNR_IPV4, RUSTD_RESOLVE_LLMNR_IPV6, RUSTD_RESOLVE_MDNS_IPV4,
+        RUSTD_RESOLVE_MDNS_IPV6,
     };
 
     if value == "help" {
@@ -1397,13 +1038,13 @@ fn protocol_flags(value: &str) -> Result<u64, Box<dyn Error>> {
     }
 
     match value.to_ascii_lowercase().as_str() {
-        "dns" => Ok(SD_RESOLVED_DNS),
-        "llmnr" => Ok(SD_RESOLVED_LLMNR_IPV4 | SD_RESOLVED_LLMNR_IPV6),
-        "llmnr-ipv4" => Ok(SD_RESOLVED_LLMNR_IPV4),
-        "llmnr-ipv6" => Ok(SD_RESOLVED_LLMNR_IPV6),
-        "mdns" => Ok(SD_RESOLVED_MDNS_IPV4 | SD_RESOLVED_MDNS_IPV6),
-        "mdns-ipv4" => Ok(SD_RESOLVED_MDNS_IPV4),
-        "mdns-ipv6" => Ok(SD_RESOLVED_MDNS_IPV6),
+        "dns" => Ok(RUSTD_RESOLVE_DNS),
+        "llmnr" => Ok(RUSTD_RESOLVE_LLMNR_IPV4 | RUSTD_RESOLVE_LLMNR_IPV6),
+        "llmnr-ipv4" => Ok(RUSTD_RESOLVE_LLMNR_IPV4),
+        "llmnr-ipv6" => Ok(RUSTD_RESOLVE_LLMNR_IPV6),
+        "mdns" => Ok(RUSTD_RESOLVE_MDNS_IPV4 | RUSTD_RESOLVE_MDNS_IPV6),
+        "mdns-ipv4" => Ok(RUSTD_RESOLVE_MDNS_IPV4),
+        "mdns-ipv6" => Ok(RUSTD_RESOLVE_MDNS_IPV6),
         _ => Err(format!("Unknown protocol specifier: {value}").into()),
     }
 }
@@ -1784,26 +1425,26 @@ fn print_query_legend_flags(flags: u64, elapsed: Duration) {
     println!();
 
     let mut protocols = Vec::new();
-    if flags & rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_DNS != 0 {
+    if flags & rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_DNS != 0 {
         protocols.push("DNS");
     }
-    if flags & rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_LLMNR_IPV4 != 0 {
+    if flags & rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_LLMNR_IPV4 != 0 {
         protocols.push("LLMNR/IPv4");
     }
-    if flags & rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_LLMNR_IPV6 != 0 {
+    if flags & rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_LLMNR_IPV6 != 0 {
         protocols.push("LLMNR/IPv6");
     }
-    if flags & rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_MDNS_IPV4 != 0 {
+    if flags & rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_MDNS_IPV4 != 0 {
         protocols.push("mDNS/IPv4");
     }
-    if flags & rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_MDNS_IPV6 != 0 {
+    if flags & rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_MDNS_IPV6 != 0 {
         protocols.push("mDNS/IPv6");
     }
 
     let authenticated =
-        flags & rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_AUTHENTICATED != 0;
+        flags & rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_AUTHENTICATED != 0;
     let confidential =
-        flags & rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_CONFIDENTIAL != 0;
+        flags & rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_CONFIDENTIAL != 0;
     println!(
         "-- Information acquired via protocol {} in {}.",
         protocols.join(" "),
@@ -1815,22 +1456,22 @@ fn print_query_legend_flags(flags: u64, elapsed: Duration) {
         if confidential { "yes" } else { "no" }
     );
     let mut sources = Vec::new();
-    if flags & rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_SYNTHETIC != 0 {
+    if flags & rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_SYNTHETIC != 0 {
         sources.push("synthetic");
     }
-    if flags & rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_FROM_CACHE != 0 {
+    if flags & rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_FROM_CACHE != 0 {
         sources.push("cache");
     }
-    if flags & rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_FROM_ZONE != 0 {
+    if flags & rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_FROM_ZONE != 0 {
         sources.push("zone");
     }
-    if flags & rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_FROM_TRUST_ANCHOR != 0 {
+    if flags & rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_FROM_TRUST_ANCHOR != 0 {
         sources.push("trust-anchor");
     }
-    if flags & rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_FROM_NETWORK != 0 {
+    if flags & rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_FROM_NETWORK != 0 {
         sources.push("network");
     }
-    if flags & rustd_resolved::dbus_resolve1_abi::flags::SD_RESOLVED_FROM_HOOK != 0 {
+    if flags & rustd_resolved::resolve_flags::flags::RUSTD_RESOLVE_FROM_HOOK != 0 {
         sources.push("hook");
     }
     if !sources.is_empty() {
@@ -3638,7 +3279,6 @@ Commands:
   dnssec [LINK [MODE]]         Get/set per-interface DNSSEC mode
   nta [LINK [DOMAIN…]]         Get/set per-interface DNSSEC NTA
   revert LINK                  Revert per-interface configuration
-  log-level [LEVEL]            Get/set logging threshold for systemd-resolved
 
 Options:
   -h --help                    Show this help
@@ -3680,168 +3320,9 @@ See the resolvectl(1) man page for details.
     );
 }
 
-fn print_resolvconf_help() {
-    println!(
-        "resolvconf -a INTERFACE <FILE\n\
-         resolvconf -d INTERFACE\n\
-         \n\
-         Register DNS server and domain configuration with systemd-resolved.\n\
-         \n\
-         Options:\n\
-           -h --help     Show this help\n\
-              --version  Show package version\n\
-           -a            Register per-interface DNS configuration\n\
-           -d            Unregister per-interface DNS configuration\n\
-           -p            Do not use this interface as default route\n\
-           -f            Ignore a missing interface\n\
-           -x            Prefer DNS traffic over this interface\n\
-           -m ARG        Ignore an openresolv metric\n\
-           -u            Exit successfully without an update"
-    );
-}
-
-fn print_systemd_resolve_help() {
-    println!(
-        "systemd-resolve [OPTIONS...] HOSTNAME|ADDRESS...\n\
-         systemd-resolve [OPTIONS...] --service [[NAME] TYPE] DOMAIN\n\
-         systemd-resolve [OPTIONS...] --openpgp EMAIL@DOMAIN...\n\
-         systemd-resolve [OPTIONS...] --statistics\n\
-         systemd-resolve [OPTIONS...] --reset-statistics\n\
-         \n\
-         Resolve domain names, IPv4 and IPv6 addresses, DNS records, and services.\n\
-         \n\
-         Options:\n\
-           -h --help                  Show this help\n\
-              --version               Show package version\n\
-           -4                         Resolve IPv4 addresses\n\
-           -6                         Resolve IPv6 addresses\n\
-           -i --interface=INTERFACE   Look on interface\n\
-           -p --protocol=PROTO|help   Look via protocol\n\
-           -t --type=TYPE|help        Query RR with DNS type\n\
-           -c --class=CLASS|help      Query RR with DNS class\n\
-              --service               Resolve service records\n\
-              --service-address=BOOL  Resolve addresses for services\n\
-              --service-txt=BOOL      Resolve TXT records for services\n\
-              --openpgp               Query OpenPGP public keys\n\
-              --tlsa[=FAMILY]         Query TLS public keys\n\
-              --cname=BOOL            Follow CNAME redirects\n\
-              --search=BOOL           Use search domains\n\
-              --statistics            Show resolver statistics\n\
-              --reset-statistics      Reset resolver statistics\n\
-              --status                Show link and server status\n\
-              --flush-caches          Flush all local DNS caches\n\
-              --reset-server-features Forget learnt DNS server features\n\
-              --set-dns=SERVER        Set a per-interface DNS server\n\
-              --set-domain=DOMAIN     Set a per-interface search domain\n\
-              --set-llmnr=MODE        Set per-interface LLMNR mode\n\
-              --set-mdns=MODE         Set per-interface MulticastDNS mode\n\
-              --set-dnsovertls=MODE   Set per-interface DNS-over-TLS mode\n\
-              --set-dnssec=MODE       Set per-interface DNSSEC mode\n\
-              --set-nta=DOMAIN        Set a per-interface DNSSEC NTA\n\
-              --revert                Revert per-interface configuration\n\
-              --raw[=payload|packet]  Dump the answer as binary data\n\
-              --no-pager              Do not pipe output into a pager\n\
-              --legend=BOOL           Print additional information"
-    );
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn invocation_detection_matches_pinned_multicall_contract() {
-        assert_eq!(
-            invocation_mode(OsStr::new("/usr/bin/resolvectl"), None),
-            InvocationMode::Native
-        );
-        assert_eq!(
-            invocation_mode(OsStr::new("/usr/sbin/resolvconf"), None),
-            InvocationMode::Resolvconf
-        );
-        assert_eq!(
-            invocation_mode(OsStr::new("/usr/bin/systemd-resolve"), None),
-            InvocationMode::SystemdResolve
-        );
-        assert_eq!(
-            invocation_mode(
-                OsStr::new("/usr/bin/resolvectl"),
-                Some(OsStr::new("systemd-resolve"))
-            ),
-            InvocationMode::SystemdResolve
-        );
-    }
-
-    #[test]
-    fn systemd_resolve_queries_translate_to_the_native_verb() {
-        let plans = translate_systemd_resolve(vec![
-            "-4".to_owned(),
-            "-ilo".to_owned(),
-            "--type=A".to_owned(),
-            "example.test".to_owned(),
-        ])
-        .unwrap();
-        assert_eq!(
-            plans,
-            [vec![
-                "-4",
-                "--interface=lo",
-                "--type=A",
-                "query",
-                "example.test"
-            ]]
-        );
-
-        let mut interface = 0;
-        merge_ifindex(&mut interface, 7).unwrap();
-        merge_ifindex(&mut interface, 7).unwrap();
-        assert!(merge_ifindex(&mut interface, 8).is_err());
-    }
-
-    #[test]
-    fn systemd_resolve_modes_and_link_setters_translate_exactly() {
-        assert_eq!(
-            translate_systemd_resolve(vec!["--tlsa=udp".to_owned(), "example.test:853".to_owned()])
-                .unwrap(),
-            [vec!["tlsa", "udp", "example.test:853"]]
-        );
-        assert_eq!(
-            translate_systemd_resolve(vec![
-                "--interface=lo".to_owned(),
-                "--set-mdns=yes".to_owned(),
-                "--set-dns=192.0.2.53".to_owned(),
-                "--set-domain=example.test".to_owned(),
-                "--set-dns=192.0.2.54".to_owned(),
-            ])
-            .unwrap(),
-            [
-                vec!["dns", "lo", "192.0.2.53", "192.0.2.54"],
-                vec!["domain", "lo", "example.test"],
-                vec!["mdns", "lo", "yes"],
-            ]
-        );
-        assert!(translate_systemd_resolve(vec!["--revert".to_owned()]).is_err());
-        assert!(translate_systemd_resolve(vec![
-            "--service".to_owned(),
-            "--type=SRV".to_owned(),
-            "example.test".to_owned(),
-        ])
-        .is_err());
-        assert!(
-            translate_systemd_resolve(vec!["--class=IN".to_owned(), "--status".to_owned()])
-                .is_err()
-        );
-        assert!(translate_systemd_resolve(vec![
-            "--service-txt=maybe".to_owned(),
-            "--interface=lo".to_owned(),
-            "--set-mdns=yes".to_owned(),
-        ])
-        .is_err());
-        assert_eq!(
-            translate_systemd_resolve(vec!["--protocol=help".to_owned()]).unwrap(),
-            [vec!["--protocol=help"]]
-        );
-    }
 
     #[test]
     fn verb_arity_matches_pinned_v261_table() {
@@ -4612,7 +4093,7 @@ mod tests {
     }
 
     #[test]
-    fn pretty_json_matches_systemd_layout() {
+    fn pretty_json_matches_native_layout() {
         let value = Value::object([
             ("name", Value::String("resolver".to_owned())),
             (
@@ -4953,38 +4434,38 @@ mod tests {
 
     #[test]
     fn query_policy_options_map_to_upstream_flags() {
-        use rustd_resolved::dbus_resolve1_abi::flags::{
-            SD_RESOLVED_DNS, SD_RESOLVED_LLMNR_IPV4, SD_RESOLVED_LLMNR_IPV6, SD_RESOLVED_MDNS_IPV4,
-            SD_RESOLVED_MDNS_IPV6, SD_RESOLVED_NO_NETWORK, SD_RESOLVED_RELAX_SINGLE_LABEL,
+        use rustd_resolved::resolve_flags::flags::{
+            RUSTD_RESOLVE_DNS, RUSTD_RESOLVE_LLMNR_IPV4, RUSTD_RESOLVE_LLMNR_IPV6, RUSTD_RESOLVE_MDNS_IPV4,
+            RUSTD_RESOLVE_MDNS_IPV6, RUSTD_RESOLVE_NO_NETWORK, RUSTD_RESOLVE_RELAX_SINGLE_LABEL,
         };
 
-        assert_eq!(protocol_flags("dns").unwrap(), SD_RESOLVED_DNS);
+        assert_eq!(protocol_flags("dns").unwrap(), RUSTD_RESOLVE_DNS);
         assert_eq!(
             protocol_flags("llmnr").unwrap(),
-            SD_RESOLVED_LLMNR_IPV4 | SD_RESOLVED_LLMNR_IPV6
+            RUSTD_RESOLVE_LLMNR_IPV4 | RUSTD_RESOLVE_LLMNR_IPV6
         );
         assert_eq!(
             protocol_flags("mdns").unwrap(),
-            SD_RESOLVED_MDNS_IPV4 | SD_RESOLVED_MDNS_IPV6
+            RUSTD_RESOLVE_MDNS_IPV4 | RUSTD_RESOLVE_MDNS_IPV6
         );
 
         let mut flags = 0;
-        set_disabled_flag(&mut flags, SD_RESOLVED_NO_NETWORK, "--network", "no").unwrap();
+        set_disabled_flag(&mut flags, RUSTD_RESOLVE_NO_NETWORK, "--network", "no").unwrap();
         set_enabled_flag(
             &mut flags,
-            SD_RESOLVED_RELAX_SINGLE_LABEL,
+            RUSTD_RESOLVE_RELAX_SINGLE_LABEL,
             "--relax-single-label",
             "yes",
         )
         .unwrap();
         assert_eq!(
             flags,
-            SD_RESOLVED_NO_NETWORK | SD_RESOLVED_RELAX_SINGLE_LABEL
+            RUSTD_RESOLVE_NO_NETWORK | RUSTD_RESOLVE_RELAX_SINGLE_LABEL
         );
-        set_disabled_flag(&mut flags, SD_RESOLVED_NO_NETWORK, "--network", "yes").unwrap();
+        set_disabled_flag(&mut flags, RUSTD_RESOLVE_NO_NETWORK, "--network", "yes").unwrap();
         set_enabled_flag(
             &mut flags,
-            SD_RESOLVED_RELAX_SINGLE_LABEL,
+            RUSTD_RESOLVE_RELAX_SINGLE_LABEL,
             "--relax-single-label",
             "no",
         )

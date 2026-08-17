@@ -83,7 +83,7 @@ impl Resolver {
         );
         if mode == QueryMode::Proxy
             && request_flags
-                & crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_SYNTHESIZE
+                & crate::resolve_flags::flags::RUSTD_RESOLVE_NO_SYNTHESIZE
                 == 0
             && Self::proxy_result_allows_synthesis(&result)
         {

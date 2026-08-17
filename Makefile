@@ -15,12 +15,8 @@ RUSTD_LIBEXECDIR ?= $(PREFIX)/lib/rustd
 RUSTD_UNITDIR ?= $(PREFIX)/lib/rustd/system
 TMPFILESDIR ?= $(PREFIX)/lib/tmpfiles.d
 SYSUSERSDIR ?= $(PREFIX)/lib/sysusers.d
-DBUSSERVICEDIR ?= $(PREFIX)/share/dbus-1/system-services
-DBUSPOLICYDIR ?= $(PREFIX)/share/dbus-1/system.d
-POLKITDIR ?= $(PREFIX)/share/polkit-1/actions
-
 .PHONY: all build test check-native check-rust check-formal check-packaging check-live check-nss check-reproducible clean install
-.PHONY: nss release boot-smoke certify bench
+.PHONY: nss release boot-smoke certify certify-smoke bench
 
 all: build
 
@@ -55,7 +51,7 @@ check-formal:
 	agda -i formal/agda formal/agda/Resolved/DNS/Transaction.agda
 
 check-packaging:
-	bash -n tests/direct-root-privilege-drop.sh tests/release_feature_boundary.sh tests/ops_runtime_contract.sh scripts/boot-smoke.sh
+	bash -n tests/direct-root-privilege-drop.sh tests/release_feature_boundary.sh tests/ops_runtime_contract.sh scripts/boot-smoke.sh scripts/installed-certification.sh
 	@set -eu; \
 	work=$$(mktemp -d); \
 	trap 'rm -rf "$$work"' EXIT HUP INT TERM; \
@@ -71,20 +67,28 @@ check-packaging:
 	test -f packaging/sysusers/rustd-resolve.conf; \
 	test -f packaging/nsswitch.conf.fragment; \
 	grep -Fq 'After=rustd-sysusers.service network-pre.target' packaging/rustd/rustd-resolved.service; \
-	grep -Fq 'ExecStart=/usr/lib/rustd/rustd-resolved --dbus' packaging/rustd/rustd-resolved.service; \
+	grep -Fq 'ExecStart=/usr/lib/rustd/rustd-resolved' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'Conflicts=systemd-resolved.service' packaging/rustd/rustd-resolved.service; \
+	grep -Fq 'ProtectSystem=strict' packaging/rustd/rustd-resolved.service; \
+	test -f packaging/NetworkManager/conf.d/20-rustd-resolved.conf; \
+	grep -Fq 'dns=default' packaging/NetworkManager/conf.d/20-rustd-resolved.conf; \
+	grep -Fq 'systemd-resolved=false' packaging/NetworkManager/conf.d/20-rustd-resolved.conf; \
 	grep -Fq 'L+ /etc/resolv.conf - - - - /run/rustd/resolve/stub-resolv.conf' packaging/tmpfiles/rustd-resolved.conf; \
-	grep -Fq 'hosts: files myhostname resolve [!UNAVAIL=return] dns' packaging/nsswitch.conf.fragment; \
-	grep -Fq 'Exec=/usr/bin/rustctl start rustd-resolved.service' packaging/dbus/org.freedesktop.resolve1.service; \
-	grep -Fq '<policy user="rustd-resolve">' packaging/dbus/org.freedesktop.resolve1.conf; \
-	! grep -E -q 'SystemdService=|systemd-resolve|Exec=/bin/false' packaging/dbus/org.freedesktop.resolve1.service packaging/dbus/org.freedesktop.resolve1.conf; \
+	grep -Fq 'hosts: files myhostname rustd_dns [!UNAVAIL=return] dns' packaging/nsswitch.conf.fragment; \
+	grep -Fq 'getenv("RUSTD_NOTIFY_SOCKET")' ffi/native.c; \
+	! grep -Fq 'getenv("NOTIFY_SOCKET")' ffi/native.c; \
+	grep -Fq '_nss_rustd_dns_gethostbyname4_r' nss/nss-rustd-dns.sym; \
 	grep -Fq 'ListenStream=/run/rustd/resolve/io.rustd.Resolve' packaging/rustd/rustd-resolved-varlink.socket; \
 	grep -Fq 'ListenStream=/run/rustd/resolve/io.rustd.Resolve.Monitor' packaging/rustd/rustd-resolved-monitor.socket; \
 	grep -Fq 'RUSTCTL="$${RUSTD_RESOLVED_RUSTCTL:-/usr/bin/rustctl}"' scripts/boot-smoke.sh; \
 	grep -Fq 'RUNTIME_DIR="$${RUSTD_RESOLVED_RUNTIME_DIR:-/run/rustd/resolve}"' scripts/boot-smoke.sh; \
 	grep -Fq 'io.rustd.Resolve' scripts/boot-smoke.sh; \
 	! grep -E -q 'systemctl|systemd-resolved|/run/systemd/resolve|resolvectl-rs' scripts/boot-smoke.sh; \
-	! grep -E -q 'systemd-resolved|systemd-resolve|/run/systemd/resolve|/usr/lib/systemd' packaging/rustd/rustd-resolved-varlink.socket packaging/rustd/rustd-resolved-monitor.socket packaging/tmpfiles/rustd-resolved.conf packaging/sysusers/rustd-resolve.conf
+	! grep -R -E -q 'org\.freedesktop\.resolve1|libnss_resolve|hosts:.*\bresolve\b' packaging PKGBUILD; \
+	bad=$$(grep -R -nE 'systemd' packaging --exclude-dir=NetworkManager | grep -v 'Conflicts=systemd-resolved.service' || true); \
+	test -z "$$bad"; \
+	! grep -E -q 'sd-notify|systemd-compat-paths|resolve1-dbus-compat' Cargo.toml
+	bash tests/ops_runtime_contract.sh
 
 check-live: build
 	python3 tests/live-dns.py target/release/rustd-resolved target/release/rustd-resolvectl
@@ -100,7 +104,7 @@ test: check-native check-rust check-packaging check-nss
 install: build nss
 	install -Dm0755 target/release/rustd-resolved $(DESTDIR)$(RUSTD_LIBEXECDIR)/rustd-resolved
 	install -Dm0755 target/release/rustd-resolvectl $(DESTDIR)$(BINDIR)/rustd-resolvectl
-	install -Dm0755 nss/libnss_resolve.so.2 $(DESTDIR)$(LIBDIR)/libnss_resolve.so.2
+	install -Dm0755 nss/libnss_rustd_dns.so.2 $(DESTDIR)$(LIBDIR)/libnss_rustd_dns.so.2
 	install -Dm0644 packaging/resolved.conf $(DESTDIR)$(SYSCONFDIR)/rustd/resolved.conf
 	install -Dm0644 packaging/nsswitch.conf.fragment $(DESTDIR)$(NSSWITCHDIR)/nsswitch.conf.fragment
 	install -Dm0644 packaging/rustd/rustd-resolved.service $(DESTDIR)$(RUSTD_UNITDIR)/rustd-resolved.service
@@ -108,12 +112,8 @@ install: build nss
 	install -Dm0644 packaging/rustd/rustd-resolved-monitor.socket $(DESTDIR)$(RUSTD_UNITDIR)/rustd-resolved-monitor.socket
 	install -Dm0644 packaging/tmpfiles/rustd-resolved.conf $(DESTDIR)$(TMPFILESDIR)/rustd-resolved.conf
 	install -Dm0644 packaging/sysusers/rustd-resolve.conf $(DESTDIR)$(SYSUSERSDIR)/rustd-resolve.conf
-	install -Dm0644 packaging/dbus/org.freedesktop.resolve1.service $(DESTDIR)$(DBUSSERVICEDIR)/org.freedesktop.resolve1.service
-	install -Dm0644 packaging/dbus/org.freedesktop.resolve1.conf $(DESTDIR)$(DBUSPOLICYDIR)/org.freedesktop.resolve1.conf
-	install -Dm0644 packaging/polkit/org.freedesktop.resolve1.policy $(DESTDIR)$(POLKITDIR)/org.freedesktop.resolve1.policy
-
-install-dbus-compat: install
-
+	install -Dm0644 packaging/NetworkManager/conf.d/20-rustd-resolved.conf \
+		$(DESTDIR)$(PREFIX)/lib/NetworkManager/conf.d/20-rustd-resolved.conf
 clean:
 	rm -rf build target
 	$(MAKE) -C nss clean
@@ -127,6 +127,10 @@ boot-smoke:
 	bash scripts/boot-smoke.sh
 
 certify: release boot-smoke
+	RUSTD_CERT_MODE=release bash scripts/installed-certification.sh
+
+certify-smoke: boot-smoke
+	RUSTD_CERT_MODE=smoke bash scripts/installed-certification.sh
 
 bench:
 	bash tests/supremacy/bench_compare.sh

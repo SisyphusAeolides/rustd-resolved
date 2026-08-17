@@ -18,15 +18,16 @@ fn installed_service_uses_daemon_owned_privilege_drop() {
 }
 
 #[test]
-fn dbus_activation_and_policy_are_rustd_native() {
-    let activation = include_str!("../packaging/dbus/org.freedesktop.resolve1.service");
-    assert!(activation.contains("Name=org.freedesktop.resolve1"));
-    assert!(activation.contains("Exec=/usr/bin/rustctl start rustd-resolved.service"));
-    assert!(activation.contains("User=root"));
-    assert!(!activation.contains("SystemdService="));
-    assert!(!activation.contains("/bin/false"));
-
-    let policy = include_str!("../packaging/dbus/org.freedesktop.resolve1.conf");
-    assert!(policy.contains("<policy user=\"rustd-resolve\">"));
-    assert!(!policy.contains("systemd-resolve"));
+fn service_exposes_only_native_varlink_control() {
+    let unit = include_str!("../packaging/rustd/rustd-resolved.service");
+    assert!(!unit.contains("--dbus"));
+    assert!(!unit.contains("org.freedesktop"));
+    assert!(
+        include_str!("../packaging/rustd/rustd-resolved-varlink.socket")
+            .contains("/run/rustd/resolve/io.rustd.Resolve")
+    );
+    assert!(
+        include_str!("../packaging/rustd/rustd-resolved-monitor.socket")
+            .contains("/run/rustd/resolve/io.rustd.Resolve.Monitor")
+    );
 }

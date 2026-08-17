@@ -116,17 +116,17 @@ finish:
 
 uint64_t sr_nss_query_flags(void)
 {
-    return disabled_query_flag("RUSTD_NSS_RESOLVE_VALIDATE", SR_RESOLVED_NO_VALIDATE) |
-           disabled_query_flag("RUSTD_NSS_RESOLVE_SYNTHESIZE", SR_RESOLVED_NO_SYNTHESIZE) |
-           disabled_query_flag("RUSTD_NSS_RESOLVE_CACHE", SR_RESOLVED_NO_CACHE) |
-           disabled_query_flag("RUSTD_NSS_RESOLVE_ZONE", SR_RESOLVED_NO_ZONE) |
-           disabled_query_flag("RUSTD_NSS_RESOLVE_TRUST_ANCHOR", SR_RESOLVED_NO_TRUST_ANCHOR) |
-           disabled_query_flag("RUSTD_NSS_RESOLVE_NETWORK", SR_RESOLVED_NO_NETWORK);
+    return disabled_query_flag("RUSTD_NSS_DNS_VALIDATE", SR_RESOLVED_NO_VALIDATE) |
+           disabled_query_flag("RUSTD_NSS_DNS_SYNTHESIZE", SR_RESOLVED_NO_SYNTHESIZE) |
+           disabled_query_flag("RUSTD_NSS_DNS_CACHE", SR_RESOLVED_NO_CACHE) |
+           disabled_query_flag("RUSTD_NSS_DNS_ZONE", SR_RESOLVED_NO_ZONE) |
+           disabled_query_flag("RUSTD_NSS_DNS_TRUST_ANCHOR", SR_RESOLVED_NO_TRUST_ANCHOR) |
+           disabled_query_flag("RUSTD_NSS_DNS_NETWORK", SR_RESOLVED_NO_NETWORK);
 }
 
 int sr_nss_query_ifindex(void)
 {
-    const char *value = secure_getenv("RUSTD_NSS_RESOLVE_INTERFACE");
+    const char *value = secure_getenv("RUSTD_NSS_DNS_INTERFACE");
     if (!value || !*value)
         return 0;
 
@@ -169,7 +169,7 @@ static int set_timeouts(int fd)
 
 static const char *varlink_socket_path(void)
 {
-    const char *value = secure_getenv("RUSTD_NSS_RESOLVE_VARLINK");
+    const char *value = secure_getenv("RUSTD_NSS_DNS_VARLINK");
     if (!value || !*value)
         return VARLINK_SOCKET_PATH;
     if (strcmp(value, "0") == 0 || strcasecmp(value, "no") == 0 ||
@@ -978,7 +978,7 @@ static int varlink_fallback_allowed(int error)
 
 static int stub_fallback_enabled(void)
 {
-    const char *value = secure_getenv("RUSTD_NSS_RESOLVE_STUB");
+    const char *value = secure_getenv("RUSTD_NSS_DNS_STUB");
     return value && *value && strcmp(value, "0") != 0 &&
            strcasecmp(value, "no") != 0 && strcasecmp(value, "false") != 0 &&
            strcasecmp(value, "off") != 0;

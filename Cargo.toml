@@ -36,7 +36,6 @@ rand = "0.9.5"
 # pull WASI packages whose manifests require a newer Cargo, so keep the
 # Rust 1.74-compatible branch explicit.
 getrandom = "=0.3.1"
-sd-notify = "0.4"
 serde = { version = "1", features = ["derive"] }
 socket2 = { version = "0.5", features = ["all"] }
 seahash = "4.1.0"
@@ -58,8 +57,6 @@ indexmap = "=2.2.6"
 [features]
 default = ["fortran-routing", "idna-name"]
 fortran-routing = []
-systemd-compat-paths = []
-resolve1-dbus-compat = []
 hyper = ["dep:tokio-util"]
 beast-wire = []
 kalman = []
@@ -87,6 +84,15 @@ unsafe_op_in_unsafe_fn = "deny"
 correctness = "deny"
 suspicious = "warn"
 perf = "warn"
+# Transitional style allowances while the resolver API surface stabilizes.
+too_many_arguments = "allow"
+type_complexity = "allow"
+field_reassign_with_default = "allow"
+blocks_in_if_conditions = "allow"
+match_like_matches_macro = "allow"
+comparison_chain = "allow"
+needless_range_loop = "allow"
+len_without_is_empty = "allow"
 
 [dev-dependencies]
 tempfile = "=3.10.1"

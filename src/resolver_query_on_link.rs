@@ -1,7 +1,7 @@
 {
         crate::query_cancel::check()?;
         validate(query, false)?;
-        let header = Header::parse(query)?;
+        let _header = Header::parse(query)?;
         let question = first_question(query)?;
         if std::env::var_os("RUSTD_RESOLVED_QUERY_DIAGNOSTICS").is_some() {
             eprintln!(
@@ -31,7 +31,7 @@
         };
 
         let synthesize = request_flags
-            & crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_SYNTHESIZE
+            & crate::resolve_flags::flags::RUSTD_RESOLVE_NO_SYNTHESIZE
             == 0;
         if synthesize {
             if let Some(response) =
@@ -58,15 +58,13 @@
                     requested_ifindex,
                 ));
             }
-            if mode == QueryMode::Full {
-                if dns_name_dont_resolve(question.name.text()) {
-                    self.counters.local_answers.fetch_add(1, Ordering::Relaxed);
-                    return Ok((
-                        wire::authoritative_nxdomain_for(query)?,
-                        synthetic_response_flags(request_flags, query),
-                        requested_ifindex,
-                    ));
-                }
+            if mode == QueryMode::Full && dns_name_dont_resolve(question.name.text()) {
+                self.counters.local_answers.fetch_add(1, Ordering::Relaxed);
+                return Ok((
+                    wire::authoritative_nxdomain_for(query)?,
+                    synthetic_response_flags(request_flags, query),
+                    requested_ifindex,
+                ));
             }
         }
         if mode == QueryMode::Full {
@@ -99,12 +97,12 @@
                     config.query_timeout,
                     cache_enabled
                         && request_flags
-                            & crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_CACHE
+                            & crate::resolve_flags::flags::RUSTD_RESOLVE_NO_CACHE
                             == 0,
                     cache_enabled,
                     config.multicast_dns_cache_size,
                     request_flags
-                        & crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_NETWORK
+                        & crate::resolve_flags::flags::RUSTD_RESOLVE_NO_NETWORK
                         == 0,
                 );
                 crate::query_cancel::check()?;
@@ -127,7 +125,7 @@
                 if !request_protocol_enabled(request_flags, llmnr_protocol_mask()) {
                     if !config.resolve_unicast_single_label
                         && request_flags
-                            & crate::dbus_resolve1_abi::flags::SD_RESOLVED_RELAX_SINGLE_LABEL
+                            & crate::resolve_flags::flags::RUSTD_RESOLVE_RELAX_SINGLE_LABEL
                             == 0
                     {
                         return Err(ResolveError::NoSuchResourceRecord);
@@ -139,10 +137,10 @@
                     query,
                     ifindex,
                     request_flags
-                        & crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_CACHE
+                        & crate::resolve_flags::flags::RUSTD_RESOLVE_NO_CACHE
                         != 0,
                     request_flags
-                        & crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_NETWORK
+                        & crate::resolve_flags::flags::RUSTD_RESOLVE_NO_NETWORK
                         == 0,
                     );
                     crate::query_cancel::check()?;
@@ -159,7 +157,7 @@
                 }
                 if !config.resolve_unicast_single_label
                     && request_flags
-                        & crate::dbus_resolve1_abi::flags::SD_RESOLVED_RELAX_SINGLE_LABEL
+                        & crate::resolve_flags::flags::RUSTD_RESOLVE_RELAX_SINGLE_LABEL
                         == 0
                 {
                     return Err(ResolveError::NoSuchResourceRecord);
@@ -184,7 +182,7 @@
         };
         let cache_enabled = config.cache;
         let read_cache = cache_enabled
-            && request_flags & crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_CACHE == 0;
+            && request_flags & crate::resolve_flags::flags::RUSTD_RESOLVE_NO_CACHE == 0;
         if read_cache {
             if let Some((response, source_ifindex)) = self.cache.get_scoped(&key, header.id, false) {
                 self.counters.cache_hits.fetch_add(1, Ordering::Relaxed);
@@ -197,15 +195,15 @@
             self.counters.cache_misses.fetch_add(1, Ordering::Relaxed);
         }
         let allow_stale = read_cache
-            && request_flags & crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_STALE == 0;
+            && request_flags & crate::resolve_flags::flags::RUSTD_RESOLVE_NO_STALE == 0;
         let stale_response = allow_stale
             .then(|| self.cache.get_scoped(&key, header.id, true))
             .flatten();
 
-        if request_flags & crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_NETWORK != 0
+        if request_flags & crate::resolve_flags::flags::RUSTD_RESOLVE_NO_NETWORK != 0
             || !request_protocol_enabled(
                 request_flags,
-                crate::dbus_resolve1_abi::flags::SD_RESOLVED_DNS,
+                crate::resolve_flags::flags::RUSTD_RESOLVE_DNS,
             )
         {
             return Err(ResolveError::NoNameServers);

@@ -2,14 +2,13 @@ Source: rustd-resolved
 Section: net
 Priority: optional
 Maintainer: Kenny Glowner <sisyphusaeolides@users.noreply.github.com>
-Build-Depends: debhelper-compat (= 13), cargo, rustc, pkg-config, libsystemd-dev
+Build-Depends: debhelper-compat (= 13), cargo, rustc, pkg-config, libssl-dev, gfortran
 Standards-Version: 4.6.0
 Homepage: https://github.com/SisyphusAeolides/rustd-resolved
 
 Package: rustd-resolved
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, systemd
-Conflicts: systemd-resolved
-Provides: systemd-resolved
-Description: Rust reimplementation of systemd-resolved
- rustd-resolved is a Rust drop-in replacement for systemd-resolved.
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Native DNS resolver for RustD
+ rustd-resolved provides DNS, mDNS, LLMNR, caching, and per-link routing
+ through RustD-native services and Varlink interfaces.

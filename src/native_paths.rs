@@ -67,16 +67,6 @@ pub fn static_record_directories() -> Vec<PathBuf> {
     ]
 }
 
-#[cfg(feature = "systemd-compat-paths")]
-pub fn static_record_directories_compat() -> Vec<PathBuf> {
-    vec![
-        PathBuf::from("/usr/lib/systemd/resolve/static.d"),
-        PathBuf::from("/usr/local/lib/systemd/resolve/static.d"),
-        PathBuf::from("/run/systemd/resolve/static.d"),
-        PathBuf::from("/etc/systemd/resolve/static.d"),
-    ]
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -86,8 +76,6 @@ mod tests {
         assert!(RUNTIME_DIR.starts_with("/run/rustd/"));
         assert!(STATE_DIR.starts_with("/var/lib/rustd/"));
         assert!(LINK_DNS_DIR.starts_with("/run/rustd/"));
-        assert!(!RUNTIME_DIR.contains("systemd"));
-        assert!(!STATE_DIR.contains("systemd"));
     }
 
     #[test]

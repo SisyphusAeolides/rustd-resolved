@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use bytes::Bytes;
 use tracing::debug;
 
-use crate::nss_backend::{build_address_answer, name_to_wire_lower, wire_to_presentation};
+use crate::nss_backend::{name_to_wire_lower, wire_to_presentation};
 use crate::resolver::Resolver;
 use crate::supremacy::budget::{QueryBudget, QueryClass};
 use crate::supremacy::l2_cache::{CKey, CVal, DnssecMark, L2Cache};
@@ -73,7 +73,7 @@ impl SupremacyResolver {
         let swr = SwrConfig::default();
         Arc::new(Self {
             backend,
-            cache: L2Cache::new(6, 8192, swr.clone()),
+            cache: L2Cache::new(6, 8192, swr),
             nsec: AggressiveNsec::new(),
             sigcache: Arc::new(SigCache::new(65536)),
             pool: TransportPool::new(4, 4096),

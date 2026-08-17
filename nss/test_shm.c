@@ -128,7 +128,7 @@ int main(void)
 
     if (msync(mapping, total, MS_SYNC) != 0)
         fail("msync");
-    if (setenv("RUSTD_NSS_RESOLVE_SHM", path, 1) != 0)
+    if (setenv("RUSTD_NSS_DNS_SHM", path, 1) != 0)
         fail("setenv");
 
     struct sr_shm_addr addresses[2];
@@ -142,14 +142,14 @@ int main(void)
         memcmp(&addresses[0], &expected_address, sizeof expected_address) != 0)
         fail("valid fixture contents");
 
-    if (unsetenv("RUSTD_NSS_RESOLVE_SHM") != 0)
+    if (unsetenv("RUSTD_NSS_DNS_SHM") != 0)
         fail("unsetenv");
     address_count = 2;
     errno = 0;
     if (sr_shm_lookup(owner, owner_length, 1, 1, &rcode,
                       addresses, &address_count, &secure) == 0 || errno != ENOENT)
         fail("shared-memory extension was enabled by default");
-    if (setenv("RUSTD_NSS_RESOLVE_SHM", path, 1) != 0)
+    if (setenv("RUSTD_NSS_DNS_SHM", path, 1) != 0)
         fail("setenv");
 
     bucket->expires_ms = realtime_ms() - 1u;

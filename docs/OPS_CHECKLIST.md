@@ -73,13 +73,16 @@ On the installed candidate, with RustD actually managing the service, run:
 ```sh
 rustctl status rustd-resolved.service
 rustd-resolvectl status
+make certify-smoke
 make certify
 ```
 
 The native boot certificate verifies the live RustD unit, the daemon PID and
 executable, the `io.rustd.Resolve` Varlink socket, generated resolver files,
-UDP/TCP stub operation, a native Varlink query, NSS resolution, localhost, and
-the `org.freedesktop.resolve1` application-interoperability bridge.
+UDP/TCP stub operation, a native Varlink query, NSS resolution, and localhost.
+`certify-smoke` records unavailable network-emulation gates as pending.
+The release-mode `certify` target fails while any of those gates remain pending,
+so a smoke result cannot be promoted as release certification.
 
 ## Recovery boundary
 

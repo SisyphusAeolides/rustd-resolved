@@ -1,6 +1,6 @@
 CC ?= cc
 CFLAGS ?= -O2 -g -fPIC -std=c17 -Wall -Wextra -Werror -Wpedantic -fstack-protector-strong -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3
-LDFLAGS_SO ?= -shared -Wl,-soname,libnss_resolve.so.2 -Wl,--version-script=nss-resolve.sym -Wl,-z,relro,-z,now
+LDFLAGS_SO ?= -shared -Wl,-soname,libnss_rustd_dns.so.2 -Wl,--version-script=nss-rustd-dns.sym -Wl,-z,relro,-z,now
 PREFIX ?= /usr
 LIBDIR ?= $(PREFIX)/lib
 
@@ -9,9 +9,9 @@ TEST_OBJS = test_nss.o test_shm.o
 
 .PHONY: all check clean install
 
-all: libnss_resolve.so.2
+all: libnss_rustd_dns.so.2
 
-libnss_resolve.so.2: $(OBJS) nss-resolve.sym
+libnss_rustd_dns.so.2: $(OBJS) nss-rustd-dns.sym
 	$(CC) $(LDFLAGS_SO) -o $@ $(OBJS)
 
 test_nss: test_nss.o $(OBJS)
@@ -28,7 +28,7 @@ check: all test_nss test_shm
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:
-	rm -f $(OBJS) $(TEST_OBJS) libnss_resolve.so.2 test_nss test_shm
+	rm -f $(OBJS) $(TEST_OBJS) libnss_rustd_dns.so.2 test_nss test_shm
 
 install: all
-	install -Dm0755 libnss_resolve.so.2 $(DESTDIR)$(LIBDIR)/libnss_resolve.so.2
+	install -Dm0755 libnss_rustd_dns.so.2 $(DESTDIR)$(LIBDIR)/libnss_rustd_dns.so.2

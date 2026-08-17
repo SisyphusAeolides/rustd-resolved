@@ -4,8 +4,6 @@ use crate::wire::{age_ttls, cache_lifetime, rewrite_id, Header, WireError};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-const STRANGE_RCODE_TTL: Duration = Duration::from_secs(10);
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CacheScope {
     Global,
@@ -179,7 +177,6 @@ impl Cache {
                 };
                 Duration::from_secs(u64::from(ttl_seconds))
             }
-            2 => STRANGE_RCODE_TTL,
             _ => return Ok(false),
         }
         .min(self.maximum_ttl);
@@ -345,12 +342,11 @@ mod tests {
     }
 
     #[test]
-    fn servfail_is_cached_when_negative_caching_is_enabled() {
+    fn servfail_is_never_cached() {
         let cache = Cache::new(16, Duration::from_secs(60), Duration::ZERO, true);
         let response = servfail_response(7);
-        assert!(cache.insert(key(), &response).expect("SERVFAIL insert"));
-        let hit = cache.get(&key(), 99, false).expect("SERVFAIL cache hit");
-        assert_eq!(Header::parse(&hit).expect("header").response_code(), 2);
+        assert!(!cache.insert(key(), &response).expect("SERVFAIL insert"));
+        assert!(cache.is_empty());
     }
 
     #[test]

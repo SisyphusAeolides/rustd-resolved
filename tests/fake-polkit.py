@@ -37,11 +37,11 @@ class Authority(dbus.service.Object):
         if self.calls_file is not None:
             with self.calls_file.open("a", encoding="ascii") as stream:
                 stream.write(f"{action}\n")
-        if action == "org.freedesktop.resolve1.dump-cache":
+        if action == "io.rustd.resolve.dump-cache":
             kind, values = subject
             valid = str(kind) == "unix-process" and "pidfd" in values and "uid" in values
             return valid, False, {}
-        if action == "org.freedesktop.resolve1.reset-statistics":
+        if action == "io.rustd.resolve.reset-statistics":
             if flags & 1:
                 kind, values = subject
                 valid = (
@@ -51,9 +51,9 @@ class Authority(dbus.service.Object):
                 )
                 return valid, False, {}
             return False, True, {}
-        if action == "org.freedesktop.resolve1.reset-server-features":
+        if action == "io.rustd.resolve.reset-server-features":
             return False, False, {}
-        if action == "org.freedesktop.resolve1.unregister-service":
+        if action == "io.rustd.resolve.unregister-service":
             return False, False, {}
         return True, False, {}
 

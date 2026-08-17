@@ -44,12 +44,12 @@ def main() -> int:
     parser.add_argument("resolve_socket", type=Path)
     parser.add_argument("--delegate")
     options = parser.parse_args()
-    monitor_socket = options.resolve_socket.with_name("io.systemd.Resolve.Monitor")
+    monitor_socket = options.resolve_socket.with_name("io.rustd.Resolve.Monitor")
 
     if options.delegate:
         configuration = call(
             options.resolve_socket,
-            "io.systemd.Resolve.DumpDNSConfiguration",
+            "io.rustd.Resolve.DumpDNSConfiguration",
         )
         entries = configuration.get("parameters", {}).get("configuration", [])
         if not any(
@@ -61,24 +61,24 @@ def main() -> int:
                 f"{configuration}"
             )
 
-    dump = call(monitor_socket, "io.systemd.Resolve.Monitor.DumpCache")
+    dump = call(monitor_socket, "io.rustd.Resolve.Monitor.DumpCache")
     if "parameters" not in dump or "error" in dump:
         raise AssertionError(f"PolicyKit-authorized cache dump failed: {dump}")
 
     expect_error(
-        call(options.resolve_socket, "io.systemd.Resolve.ResetStatistics"),
+        call(options.resolve_socket, "io.rustd.Resolve.ResetStatistics"),
         "org.varlink.service.InteractiveAuthenticationRequired",
     )
     interactive = call(
         options.resolve_socket,
-        "io.systemd.Resolve.ResetStatistics",
+        "io.rustd.Resolve.ResetStatistics",
         {"allowInteractiveAuthentication": True},
     )
     if "parameters" not in interactive or "error" in interactive:
         raise AssertionError(f"interactive PolicyKit authorization failed: {interactive}")
 
     expect_error(
-        call(options.resolve_socket, "io.systemd.Resolve.ResetServerFeatures"),
+        call(options.resolve_socket, "io.rustd.Resolve.ResetServerFeatures"),
         "org.varlink.service.PermissionDenied",
     )
     return 0

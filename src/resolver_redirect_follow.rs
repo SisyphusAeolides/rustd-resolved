@@ -113,7 +113,7 @@ impl Resolver {
                     redirects: packet_redirects,
                 } => {
                     if packet_redirects > 0
-                        && request_flags & crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_CNAME
+                        && request_flags & crate::resolve_flags::flags::RUSTD_RESOLVE_NO_CNAME
                             != 0
                     {
                         return Err(ResolveError::Wire(WireError::CnameLoop));
@@ -135,7 +135,7 @@ impl Resolver {
                     canonical_name,
                     redirects: packet_redirects,
                 } => {
-                    if request_flags & crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_CNAME != 0 {
+                    if request_flags & crate::resolve_flags::flags::RUSTD_RESOLVE_NO_CNAME != 0 {
                         return Err(ResolveError::Wire(WireError::CnameLoop));
                     }
                     if packet_redirects == 0 {

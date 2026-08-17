@@ -1,4 +1,4 @@
-//! systemd integration: sd_notify, watchdog, signal-driven control flags.
+//! RustD manager notification, watchdog, and signal-driven control flags.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -20,51 +20,21 @@ pub struct LifecycleStats {
     pub watchdog_ticks: u64,
 }
 
-#[cfg(target_os = "linux")]
-mod linux_notify {
-    use sd_notify::NotifyState;
-
-    pub fn ready() {
-        let _ = sd_notify::notify(false, &[NotifyState::Ready]);
-    }
-    pub fn stopping() {
-        let _ = sd_notify::notify(false, &[NotifyState::Stopping]);
-    }
-    pub fn watchdog() {
-        let _ = sd_notify::notify(false, &[NotifyState::Watchdog]);
-    }
-    pub fn status(msg: &str) {
-        let _ = sd_notify::notify(false, &[NotifyState::Status(msg)]);
-    }
-    pub fn errno(err: i32) {
-        let _ = sd_notify::notify(false, &[NotifyState::Errno(err as u32)]);
-    }
+pub fn rustd_notify_ready() {
+    let _ = crate::native::notify("READY=1");
+    info!("RustD manager notified READY=1");
 }
 
-#[cfg(not(target_os = "linux"))]
-mod linux_notify {
-    pub fn ready() {}
-    pub fn stopping() {}
-    pub fn watchdog() {}
-    pub fn status(_: &str) {}
-    pub fn errno(_: i32) {}
+pub fn rustd_notify_stopping() {
+    let _ = crate::native::notify("STOPPING=1");
 }
 
-pub fn sd_notify_ready() {
-    linux_notify::ready();
-    info!("sd_notify READY=1");
+pub fn rustd_notify_watchdog() {
+    let _ = crate::native::notify("WATCHDOG=1");
 }
 
-pub fn sd_notify_stopping() {
-    linux_notify::stopping();
-}
-
-pub fn sd_notify_watchdog() {
-    linux_notify::watchdog();
-}
-
-pub fn sd_notify_status(msg: impl AsRef<str>) {
-    linux_notify::status(msg.as_ref());
+pub fn rustd_notify_status(msg: impl AsRef<str>) {
+    let _ = crate::native::notify(&format!("STATUS={}", msg.as_ref()));
 }
 
 pub fn take_reload() -> bool {
@@ -180,7 +150,7 @@ pub fn spawn_watchdog_loop(interval: Duration) {
             if stop_requested() {
                 break;
             }
-            sd_notify_watchdog();
+            rustd_notify_watchdog();
         }
     });
 }

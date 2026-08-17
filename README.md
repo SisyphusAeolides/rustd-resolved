@@ -15,11 +15,9 @@ The native resolver contract is:
 - service account: `rustd-resolve`;
 - public and canonical Varlink namespace: `io.rustd`, `io.rustd.service`, `io.rustd.Resolve`, and `io.rustd.Resolve.Monitor`;
 - native NSS resolver socket: `/run/rustd/resolve/io.rustd.Resolve`;
-- RustD-specific NSS controls: `RUSTD_NSS_RESOLVE_*`.
+- RustD-specific NSS controls: `RUSTD_NSS_DNS_*`.
 
-The shared resolver dispatcher now uses `io.rustd.*` canonically. Native requests remain native through the core. Legacy `io.systemd.*` Varlink identifiers, where supported for existing external clients, are translated into the RustD namespace at the transport boundary and translated back only for the compatibility caller's reply. They no longer define the resolver's internal architecture.
-
-`org.freedesktop.resolve1` D-Bus remains an application-interoperability bridge. It is tested independently from the native RustD Varlink path and does not define RustD's executable names, runtime roots, package identity, NSS defaults, or internal resolver vocabulary.
+The shared resolver dispatcher now uses `io.rustd.*` canonically. Native requests remain native through the core. Only `io.rustd.*` Varlink identifiers are accepted; no namespace translation is performed.
 
 ## Installation surface
 
@@ -44,7 +42,7 @@ The implementation includes:
 - per-link state and split-DNS routing;
 - DNS-over-TLS and DNSSEC;
 - dual-stack LLMNR and mDNS resolver/responder behavior plus DNS-SD;
-- glibc NSS integration through `libnss_resolve.so.2`;
+- glibc NSS integration through `libnss_rustd_dns.so.2`;
 - Fortran routing-domain scoring, Idris resolver-policy models, and Agda wire/bound invariants.
 
 These are RustD resolver capabilities, not an upstream parity score.

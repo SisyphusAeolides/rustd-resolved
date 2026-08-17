@@ -5,6 +5,14 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 REPORT_DIR="${RUSTD_CERT_REPORT_DIR:-$ROOT/target/certification}"
+MODE="${RUSTD_CERT_MODE:-smoke}"
+case "$MODE" in
+  smoke|release) ;;
+  *)
+    printf 'installed certification: invalid mode %q (expected smoke or release)\n' "$MODE" >&2
+    exit 2
+    ;;
+esac
 mkdir -p "$REPORT_DIR"
 REPORT="$REPORT_DIR/resolver-certification.jsonl"
 : >"$REPORT"
@@ -31,3 +39,7 @@ for gate in dns.link_flap dns.vpn_change dns.namespace dns.dnssec_rollover \
 done
 
 echo "Resolver certification report: $REPORT"
+if [[ "$MODE" == release ]]; then
+  printf 'installed certification: release blocked by pending network-lab gates\n' >&2
+  exit 1
+fi

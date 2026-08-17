@@ -1,14 +1,12 @@
 pkgname=rustd-resolved
 pkgver=0.2.1
 pkgrel=1
-pkgdesc='Compatibility-oriented Rust reimplementation of systemd-resolved'
+pkgdesc='Native DNS resolver for RustD'
 arch=('x86_64')
 url='https://github.com/SisyphusAeolides/rustd-resolved'
 license=('LGPL-2.1-or-later')
-depends=('systemd' 'openssl')
+depends=('openssl')
 makedepends=('rust' 'gcc-fortran' 'git')
-provides=('systemd-resolved')
-conflicts=('systemd-resolved')
 source=("${pkgname}::git+${url}.git")
 b2sums=('SKIP')
 

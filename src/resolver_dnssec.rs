@@ -59,7 +59,7 @@ impl Resolver {
         let mode = self.server_dnssec_mode(server);
         if mode == ValidationMode::No
             || Header::parse(query)?.checking_disabled()
-            || request_flags & crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_VALIDATE != 0
+            || request_flags & crate::resolve_flags::flags::RUSTD_RESOLVE_NO_VALIDATE != 0
             || self
                 .dnssec_name_has_negative_trust_anchor(server, first_question(query)?.name.text())
         {
@@ -67,7 +67,7 @@ impl Resolver {
         }
 
         let anchors =
-            if request_flags & crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_TRUST_ANCHOR != 0 {
+            if request_flags & crate::resolve_flags::flags::RUSTD_RESOLVE_NO_TRUST_ANCHOR != 0 {
                 Vec::new()
             } else {
                 load_positive_trust_anchors()
@@ -831,11 +831,11 @@ fn nsec_covers_name(
 ) -> Result<bool, ResolveError> {
     let nsec = wire::parse_nsec(packet, record)?;
     let name = wire::encode_name(&normalize_dns_name(name))?;
-    Ok(canonical_name_interval_covers(
+    canonical_name_interval_covers(
         record.name.canonical_wire(),
         nsec.next_domain.canonical_wire(),
         &name,
-    )?)
+    )
 }
 
 fn canonical_name_interval_covers(
@@ -1371,13 +1371,10 @@ fn parse_positive_trust_anchor_line(line: &str) -> Option<PositiveTrustAnchor> {
     }
     let owner = normalize_dns_name(fields[0]);
     let data = if fields[2].eq_ignore_ascii_case("DS") {
-        if fields.len() != 7 {
-            if !fields
+        if fields.len() != 7 && !fields
                 .get(7)
-                .is_some_and(|field| is_escaped_comment_trailer(field))
-            {
-                return None;
-            }
+                .is_some_and(|field| is_escaped_comment_trailer(field)) {
+            return None;
         }
         PositiveTrustAnchorData::Ds {
             key_tag: fields[3].parse().ok()?,
@@ -1386,13 +1383,10 @@ fn parse_positive_trust_anchor_line(line: &str) -> Option<PositiveTrustAnchor> {
             digest: decode_hex(fields[6].trim_matches('"'))?,
         }
     } else if fields[2].eq_ignore_ascii_case("DNSKEY") {
-        if fields.len() != 7 {
-            if !fields
+        if fields.len() != 7 && !fields
                 .get(7)
-                .is_some_and(|field| is_escaped_comment_trailer(field))
-            {
-                return None;
-            }
+                .is_some_and(|field| is_escaped_comment_trailer(field)) {
+            return None;
         }
         let flags = fields[3].parse::<u16>().ok()?;
         let protocol = fields[4].parse::<u8>().ok()?;

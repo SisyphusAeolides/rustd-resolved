@@ -44,7 +44,7 @@ mod test_30_query_abort {
                 "abort.example",
                 2,
                 None,
-                crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_SEARCH,
+                crate::resolve_flags::flags::RUSTD_RESOLVE_NO_SEARCH,
             )
         });
 

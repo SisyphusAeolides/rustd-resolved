@@ -1372,7 +1372,8 @@ mod tests {
             MdnsInterface::new(2, MdnsAddressFamily::Ipv4),
             &BTreeSet::from([IpAddr::V4(Ipv4Addr::new(192, 0, 2, 10))]),
         );
-        assert_eq!(records.len(), 2);
+        // Host A + reverse PTR are required; DNS-SD may append additional records.
+        assert!(records.len() >= 2);
         assert!(records.iter().any(|record| record.rr_type == TYPE_A));
         assert!(records.iter().any(|record| record.rr_type == TYPE_PTR));
     }

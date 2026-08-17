@@ -134,7 +134,7 @@ static int parse_ifindex(const char *ifname, uint32_t *scope_id)
 
 static int stub_endpoint(struct sockaddr_storage *storage, socklen_t *length)
 {
-    const char *value = secure_getenv("RUSTD_NSS_RESOLVE_STUB");
+    const char *value = secure_getenv("RUSTD_NSS_DNS_STUB");
     char host[100];
     uint16_t port = 53;
     uint32_t scope_id = 0;

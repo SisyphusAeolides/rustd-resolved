@@ -168,11 +168,11 @@ mod test_03_synthetic_and_parallel_scopes {
             .expect("first response");
         assert_eq!(resolver.cache.len(), 1);
         assert_ne!(
-            first_flags & crate::dbus_resolve1_abi::flags::SD_RESOLVED_FROM_NETWORK,
+            first_flags & crate::resolve_flags::flags::RUSTD_RESOLVE_FROM_NETWORK,
             0
         );
         assert_eq!(
-            first_flags & crate::dbus_resolve1_abi::flags::SD_RESOLVED_FROM_CACHE,
+            first_flags & crate::resolve_flags::flags::RUSTD_RESOLVE_FROM_CACHE,
             0
         );
 
@@ -182,11 +182,11 @@ mod test_03_synthetic_and_parallel_scopes {
             .expect("cached response");
         assert_eq!(&response[..2], &0x7401u16.to_be_bytes());
         assert_ne!(
-            second_flags & crate::dbus_resolve1_abi::flags::SD_RESOLVED_FROM_CACHE,
+            second_flags & crate::resolve_flags::flags::RUSTD_RESOLVE_FROM_CACHE,
             0
         );
         assert_eq!(
-            second_flags & crate::dbus_resolve1_abi::flags::SD_RESOLVED_FROM_NETWORK,
+            second_flags & crate::resolve_flags::flags::RUSTD_RESOLVE_FROM_NETWORK,
             0
         );
 
@@ -196,11 +196,11 @@ mod test_03_synthetic_and_parallel_scopes {
                 &third,
                 QueryMode::Full,
                 None,
-                crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_NETWORK,
+                crate::resolve_flags::flags::RUSTD_RESOLVE_NO_NETWORK,
             )
             .expect("network-disabled cache hit");
         assert_ne!(
-            third_flags & crate::dbus_resolve1_abi::flags::SD_RESOLVED_FROM_CACHE,
+            third_flags & crate::resolve_flags::flags::RUSTD_RESOLVE_FROM_CACHE,
             0
         );
 
@@ -210,8 +210,8 @@ mod test_03_synthetic_and_parallel_scopes {
                 &fourth,
                 QueryMode::Full,
                 None,
-                crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_NETWORK
-                    | crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_CACHE,
+                crate::resolve_flags::flags::RUSTD_RESOLVE_NO_NETWORK
+                    | crate::resolve_flags::flags::RUSTD_RESOLVE_NO_CACHE,
             ),
             Err(ResolveError::NoNameServers)
         ));
@@ -301,11 +301,11 @@ mod test_03_synthetic_and_parallel_scopes {
                 &first,
                 QueryMode::Full,
                 None,
-                crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_CACHE,
+                crate::resolve_flags::flags::RUSTD_RESOLVE_NO_CACHE,
             )
             .expect("network response");
         assert_ne!(
-            first_flags & crate::dbus_resolve1_abi::flags::SD_RESOLVED_FROM_NETWORK,
+            first_flags & crate::resolve_flags::flags::RUSTD_RESOLVE_FROM_NETWORK,
             0
         );
         assert_eq!(resolver.cache.len(), 1);
@@ -316,11 +316,11 @@ mod test_03_synthetic_and_parallel_scopes {
                 &second,
                 QueryMode::Full,
                 None,
-                crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_NETWORK,
+                crate::resolve_flags::flags::RUSTD_RESOLVE_NO_NETWORK,
             )
             .expect("cached response");
         assert_ne!(
-            second_flags & crate::dbus_resolve1_abi::flags::SD_RESOLVED_FROM_CACHE,
+            second_flags & crate::resolve_flags::flags::RUSTD_RESOLVE_FROM_CACHE,
             0
         );
         server_thread.join().expect("mock DNS thread");

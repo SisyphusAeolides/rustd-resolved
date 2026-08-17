@@ -221,7 +221,7 @@ mod test_11_cross_transaction_redirects {
             wire::CLASS_IN,
             TYPE_A,
             None,
-            crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_CNAME,
+            crate::resolve_flags::flags::RUSTD_RESOLVE_NO_CNAME,
         );
         assert!(matches!(
             result,

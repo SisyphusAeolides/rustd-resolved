@@ -27,7 +27,7 @@ fn install_surface_is_rustd_native_only() {
         "RUSTD_LIBEXECDIR ?= $(PREFIX)/lib/rustd",
         "target/release/rustd-resolved $(DESTDIR)$(RUSTD_LIBEXECDIR)/rustd-resolved",
         "target/release/rustd-resolvectl $(DESTDIR)$(BINDIR)/rustd-resolvectl",
-        "$(LIBDIR)/libnss_resolve.so.2",
+        "$(LIBDIR)/libnss_rustd_dns.so.2",
         "packaging/rustd/rustd-resolved.service",
         "packaging/rustd/rustd-resolved-varlink.socket",
         "packaging/rustd/rustd-resolved-monitor.socket",
@@ -52,12 +52,26 @@ fn install_surface_is_rustd_native_only() {
         "$(BINDIR)/systemd-resolve",
         "systemd-resolved.service",
         "/run/systemd/resolve",
+        "org.freedesktop.resolve1",
+        "libnss_resolve",
     ] {
         assert!(
             !install_recipe.contains(forbidden),
             "legacy compatibility install surface remains: {forbidden}"
         );
     }
+}
+
+#[test]
+fn native_nss_contract_uses_rustd_dns_service() {
+    let makefile = include_str!("../nss/Makefile");
+    let symbols = include_str!("../nss/nss-rustd-dns.sym");
+    let nsswitch = include_str!("../packaging/nsswitch.conf.fragment");
+
+    assert!(makefile.contains("libnss_rustd_dns.so.2"));
+    assert!(symbols.contains("_nss_rustd_dns_gethostbyname4_r"));
+    assert!(nsswitch.contains("hosts: files myhostname rustd_dns"));
+    assert!(!nsswitch.contains(" hosts: resolve"));
 }
 
 #[test]

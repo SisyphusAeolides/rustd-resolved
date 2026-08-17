@@ -1,18 +1,20 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 use crate::bounded_executor::varlink_executor;
 use crate::daemon::stop_requested;
-use crate::dbus_resolve1_abi::flags::{
-    SD_RESOLVED_DNS, SD_RESOLVED_NO_ADDRESS, SD_RESOLVED_NO_SEARCH, SD_RESOLVED_NO_TXT,
-};
 use crate::json::{self, JsonObject, Value};
 use crate::log_control::LogControlState;
 use crate::native;
+#[cfg(test)]
+use crate::resolve_flags::flags::RUSTD_RESOLVE_DNS;
+use crate::resolve_flags::flags::{
+    RUSTD_RESOLVE_NO_ADDRESS, RUSTD_RESOLVE_NO_SEARCH, RUSTD_RESOLVE_NO_TXT,
+};
 use crate::resolver::{ResolveError, Resolver};
 use crate::varlink_polkit::{AuthorizationDecision, VarlinkAuthorization};
 use crate::wire::{
     self, extract_answer_records, extract_matching_answer_records,
-    extract_service_records_for_name, make_query, Header, CLASS_IN, TYPE_A, TYPE_AAAA, TYPE_PTR,
-    TYPE_SRV, TYPE_TXT,
+    extract_service_records_for_name, make_query, CLASS_IN, TYPE_A, TYPE_AAAA, TYPE_PTR, TYPE_SRV,
+    TYPE_TXT,
 };
 use std::collections::HashMap;
 use std::env;
@@ -22,7 +24,6 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 #[cfg(test)]
 use std::os::fd::IntoRawFd;
 use std::os::fd::{AsRawFd, FromRawFd, RawFd};
-use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{FileTypeExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
@@ -583,28 +584,22 @@ impl SubscriptionMethod {
     const fn action(self) -> Option<&'static str> {
         match self {
             Self::BrowseServices => None,
-            Self::QueryResults => Some("org.freedesktop.resolve1.subscribe-query-results"),
-            Self::DnsConfiguration => Some("org.freedesktop.resolve1.subscribe-dns-configuration"),
+            Self::QueryResults => Some("io.rustd.resolve.subscribe-query-results"),
+            Self::DnsConfiguration => Some("io.rustd.resolve.subscribe-dns-configuration"),
         }
     }
 }
 
 fn control_action(method: &str) -> Option<&'static str> {
     match method {
-        "io.rustd.Resolve.Monitor.DumpCache" => Some("org.freedesktop.resolve1.dump-cache"),
-        "io.rustd.Resolve.Monitor.DumpServerState" => {
-            Some("org.freedesktop.resolve1.dump-server-state")
-        }
-        "io.rustd.Resolve.Monitor.DumpStatistics" => {
-            Some("org.freedesktop.resolve1.dump-statistics")
-        }
+        "io.rustd.Resolve.Monitor.DumpCache" => Some("io.rustd.resolve.dump-cache"),
+        "io.rustd.Resolve.Monitor.DumpServerState" => Some("io.rustd.resolve.dump-server-state"),
+        "io.rustd.Resolve.Monitor.DumpStatistics" => Some("io.rustd.resolve.dump-statistics"),
         "io.rustd.Resolve.Monitor.ResetStatistics" | "io.rustd.Resolve.ResetStatistics" => {
-            Some("org.freedesktop.resolve1.reset-statistics")
+            Some("io.rustd.resolve.reset-statistics")
         }
-        "io.rustd.Resolve.FlushCaches" => Some("org.freedesktop.resolve1.flush-caches"),
-        "io.rustd.Resolve.ResetServerFeatures" => {
-            Some("org.freedesktop.resolve1.reset-server-features")
-        }
+        "io.rustd.Resolve.FlushCaches" => Some("io.rustd.resolve.flush-caches"),
+        "io.rustd.Resolve.ResetServerFeatures" => Some("io.rustd.resolve.reset-server-features"),
         _ => None,
     }
 }
@@ -1118,7 +1113,9 @@ fn resolve_hostname(parameters: &Value, resolver: &Resolver) -> Value {
         Err(error) => return error,
     };
     let flags = match optional_u64(parameters, "flags", 0) {
-        Ok(value) if crate::resolver::query_flags_are_valid(value, SD_RESOLVED_NO_SEARCH) => value,
+        Ok(value) if crate::resolver::query_flags_are_valid(value, RUSTD_RESOLVE_NO_SEARCH) => {
+            value
+        }
         Ok(_) | Err(_) => return invalid_parameter("flags"),
     };
 
@@ -1298,10 +1295,10 @@ fn resolve_service_primary_records(
             CLASS_IN,
             rr_type,
             (request.ifindex > 0).then_some(request.ifindex),
-            request.flags | SD_RESOLVED_NO_SEARCH,
+            request.flags | RUSTD_RESOLVE_NO_SEARCH,
         )
     };
-    if request.flags & SD_RESOLVED_NO_TXT != 0 {
+    if request.flags & RUSTD_RESOLVE_NO_TXT != 0 {
         return (lookup(TYPE_SRV, false), None);
     }
     let grouped = resolver.grouped_hook_record_response_dual(
@@ -1309,18 +1306,18 @@ fn resolve_service_primary_records(
         &request.question.unicast_owner,
         &[TYPE_SRV, TYPE_TXT],
         (request.ifindex > 0).then_some(request.ifindex),
-        request.flags | SD_RESOLVED_NO_SEARCH,
+        request.flags | RUSTD_RESOLVE_NO_SEARCH,
     );
     match grouped {
-        Err(error) => return (Err(error), None),
+        Err(error) => (Err(error), None),
         Ok((_, Some((response, flags, response_ifindex)))) => {
             let (rcode, extended_dns_error_code, extended_dns_error_message) =
                 match crate::resolver::response_full_rcode(&response) {
                     Ok(value) => value,
-                    Err(error) => return (Err(error.into()), None),
+                    Err(error) => return (Err(error), None),
                 };
             if rcode != 0 {
-                let mut make_error =
+                let make_error =
                     |extended_dns_error_message: Option<String>| ResolveError::DnsError {
                         rcode,
                         query: request.question.owner.clone(),
@@ -1356,14 +1353,12 @@ fn resolve_service_primary_records(
                     response_ifindex,
                 ))
             };
-            return (result(), Some(result()));
+            (result(), Some(result()))
         }
-        Ok((grouped_hook_checked, None)) => {
-            return resolve_service_primary_records_parallel(
-                |rr_type| lookup(rr_type, grouped_hook_checked),
-                true,
-            )
-        }
+        Ok((grouped_hook_checked, None)) => resolve_service_primary_records_parallel(
+            |rr_type| lookup(rr_type, grouped_hook_checked),
+            true,
+        ),
     }
 }
 
@@ -1389,10 +1384,10 @@ fn resolve_service_primary_records_parallel(
 fn apply_refused_service_flags(request: &mut ServiceRequest, resolver: &Resolver) {
     let refused = &resolver.config().refuse_record_types;
     if refused.contains(&TYPE_A) && refused.contains(&TYPE_AAAA) {
-        request.flags |= SD_RESOLVED_NO_ADDRESS;
+        request.flags |= RUSTD_RESOLVE_NO_ADDRESS;
     }
     if refused.contains(&TYPE_TXT) {
-        request.flags |= SD_RESOLVED_NO_TXT;
+        request.flags |= RUSTD_RESOLVE_NO_TXT;
     }
 }
 
@@ -1411,7 +1406,10 @@ fn service_request(parameters: &Value) -> Result<ServiceRequest, Value> {
         return Err(invalid_parameter("ifindex"));
     }
     let flags = optional_u64(parameters, "flags", 0)?;
-    if !crate::resolver::query_flags_are_valid(flags, SD_RESOLVED_NO_ADDRESS | SD_RESOLVED_NO_TXT) {
+    if !crate::resolver::query_flags_are_valid(
+        flags,
+        RUSTD_RESOLVE_NO_ADDRESS | RUSTD_RESOLVE_NO_TXT,
+    ) {
         return Err(invalid_parameter("flags"));
     }
     if name
@@ -1468,7 +1466,7 @@ fn resolve_service_entries(
                 Value::String(record.target.text().to_owned()),
             ),
         ]);
-        if request.flags & SD_RESOLVED_NO_ADDRESS == 0 {
+        if request.flags & RUSTD_RESOLVE_NO_ADDRESS == 0 {
             if std::env::var_os("RUSTD_RESOLVED_QUERY_DIAGNOSTICS").is_some() {
                 eprintln!(
                     "rustd-resolved: ResolveService target={:?} family={} ifindex={} flags={:#x}",
@@ -1482,7 +1480,7 @@ fn resolve_service_entries(
                 record.target.text(),
                 request.family,
                 (request.ifindex > 0).then_some(request.ifindex),
-                request.flags | SD_RESOLVED_NO_SEARCH,
+                request.flags | RUSTD_RESOLVE_NO_SEARCH,
             ) {
                 Ok(lookup) => lookup,
                 Err(error) => {
@@ -1785,7 +1783,9 @@ fn resolve_record(parameters: &Value, resolver: &Resolver) -> Value {
         Err(error) => return error,
     };
     let request_flags = match optional_u64(parameters, "flags", 0) {
-        Ok(value) if crate::resolver::query_flags_are_valid(value, SD_RESOLVED_NO_SEARCH) => value,
+        Ok(value) if crate::resolver::query_flags_are_valid(value, RUSTD_RESOLVE_NO_SEARCH) => {
+            value
+        }
         Ok(_) | Err(_) => return invalid_parameter("flags"),
     };
 
@@ -1796,9 +1796,9 @@ fn resolve_record(parameters: &Value, resolver: &Resolver) -> Value {
             rr_type,
             (ifindex > 0).then_some(ifindex),
             request_flags
-                | SD_RESOLVED_NO_SEARCH
-                | crate::dbus_resolve1_abi::flags::SD_RESOLVED_REQUIRE_PRIMARY
-                | crate::dbus_resolve1_abi::flags::SD_RESOLVED_CLAMP_TTL,
+                | RUSTD_RESOLVE_NO_SEARCH
+                | crate::resolve_flags::flags::RUSTD_RESOLVE_REQUIRE_PRIMARY
+                | crate::resolve_flags::flags::RUSTD_RESOLVE_CLAMP_TTL,
         ) {
         Ok(response) => response,
         Err(error) => return resolver_error(&error),
@@ -2121,7 +2121,7 @@ mod tests {
 
         let request = format!(
             r#"{{"method":"io.rustd.Resolve.ResolveHostname","parameters":{{"name":"disconnect.example","family":2,"flags":{}}}}}"#,
-            SD_RESOLVED_NO_SEARCH
+            RUSTD_RESOLVE_NO_SEARCH
         );
         client
             .write_all(request.as_bytes())
@@ -2152,27 +2152,27 @@ mod tests {
         for (method, action) in [
             (
                 "io.rustd.Resolve.Monitor.DumpCache",
-                "org.freedesktop.resolve1.dump-cache",
+                "io.rustd.resolve.dump-cache",
             ),
             (
                 "io.rustd.Resolve.Monitor.DumpServerState",
-                "org.freedesktop.resolve1.dump-server-state",
+                "io.rustd.resolve.dump-server-state",
             ),
             (
                 "io.rustd.Resolve.Monitor.DumpStatistics",
-                "org.freedesktop.resolve1.dump-statistics",
+                "io.rustd.resolve.dump-statistics",
             ),
             (
                 "io.rustd.Resolve.Monitor.ResetStatistics",
-                "org.freedesktop.resolve1.reset-statistics",
+                "io.rustd.resolve.reset-statistics",
             ),
             (
                 "io.rustd.Resolve.FlushCaches",
-                "org.freedesktop.resolve1.flush-caches",
+                "io.rustd.resolve.flush-caches",
             ),
             (
                 "io.rustd.Resolve.ResetServerFeatures",
-                "org.freedesktop.resolve1.reset-server-features",
+                "io.rustd.resolve.reset-server-features",
             ),
         ] {
             assert_eq!(control_action(method), Some(action));
@@ -2471,13 +2471,13 @@ mod tests {
             .and_then(|parameters| parameters.get("flags"))
             .and_then(Value::as_u64)
             .expect("reply flags");
-        assert_ne!(flags & SD_RESOLVED_DNS, 0);
+        assert_ne!(flags & RUSTD_RESOLVE_DNS, 0);
         assert_ne!(
-            flags & crate::dbus_resolve1_abi::flags::SD_RESOLVED_SYNTHETIC,
+            flags & crate::resolve_flags::flags::RUSTD_RESOLVE_SYNTHETIC,
             0
         );
         assert_eq!(
-            flags & crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_VALIDATE,
+            flags & crate::resolve_flags::flags::RUSTD_RESOLVE_NO_VALIDATE,
             0
         );
     }
@@ -2651,8 +2651,8 @@ mod tests {
         ]))
         .expect("service request");
         apply_refused_service_flags(&mut request, &resolver);
-        assert_ne!(request.flags & SD_RESOLVED_NO_ADDRESS, 0);
-        assert_ne!(request.flags & SD_RESOLVED_NO_TXT, 0);
+        assert_ne!(request.flags & RUSTD_RESOLVE_NO_ADDRESS, 0);
+        assert_ne!(request.flags & RUSTD_RESOLVE_NO_TXT, 0);
     }
 
     #[test]
@@ -2660,7 +2660,7 @@ mod tests {
         let question =
             service_question(None, Some("_demo._tcp"), "example.test").expect("service question");
         let response_flags =
-            SD_RESOLVED_DNS | crate::dbus_resolve1_abi::flags::SD_RESOLVED_FROM_NETWORK;
+            RUSTD_RESOLVE_DNS | crate::resolve_flags::flags::RUSTD_RESOLVE_FROM_NETWORK;
         let mut output = JsonObject::new();
 
         add_service_metadata(&mut output, &question, response_flags);
@@ -2670,7 +2670,7 @@ mod tests {
             Some(response_flags)
         );
         assert_eq!(
-            response_flags & (SD_RESOLVED_NO_ADDRESS | SD_RESOLVED_NO_TXT),
+            response_flags & (RUSTD_RESOLVE_NO_ADDRESS | RUSTD_RESOLVE_NO_TXT),
             0
         );
     }
@@ -2745,7 +2745,7 @@ mod tests {
         ]))
         .expect("service request");
         apply_refused_service_flags(&mut request, &resolver);
-        assert_eq!(request.flags & SD_RESOLVED_NO_ADDRESS, 0);
+        assert_eq!(request.flags & RUSTD_RESOLVE_NO_ADDRESS, 0);
     }
 
     #[test]
@@ -3376,7 +3376,7 @@ mod tests {
             dnssec: crate::config::ValidationMode::No,
             ..Config::default()
         });
-        let flags = SD_RESOLVED_NO_ADDRESS | SD_RESOLVED_NO_TXT;
+        let flags = RUSTD_RESOLVE_NO_ADDRESS | RUSTD_RESOLVE_NO_TXT;
         let reply = dispatch(
             &format!(
                 r#"{{"method":"io.rustd.Resolve.ResolveService","parameters":{{"name":"Café.Desk","type":"_demo._tcp","domain":"bücher.example","flags":{flags}}}}}"#
@@ -3415,7 +3415,7 @@ mod tests {
         });
         let reply = dispatch(
             &format!(
-                r#"{{"method":"io.rustd.Resolve.ResolveService","parameters":{{"type":"_demo._tcp","domain":"example.test","flags":{SD_RESOLVED_NO_ADDRESS}}}}}"#
+                r#"{{"method":"io.rustd.Resolve.ResolveService","parameters":{{"type":"_demo._tcp","domain":"example.test","flags":{RUSTD_RESOLVE_NO_ADDRESS}}}}}"#
             ),
             &resolver,
         );

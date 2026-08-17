@@ -47,15 +47,6 @@ native_varlink_query() {
     "$RESOLVECTL" --socket "$VARLINK_SOCKET" query "$PROBE_NAME" >/dev/null
 }
 
-dbus_bridge_query() {
-    command -v busctl >/dev/null 2>&1
-    busctl get-property \
-        org.freedesktop.resolve1 \
-        /org/freedesktop/resolve1 \
-        org.freedesktop.resolve1.Manager \
-        DNSEx >/dev/null
-}
-
 check rustd-service-active service_active
 check native-resolver-binary native_binary_active
 check native-varlink-socket test -S "$VARLINK_SOCKET"
@@ -64,7 +55,6 @@ check uplink-resolv-conf test -s "${RUNTIME_DIR}/resolv.conf"
 check resolv-conf-link resolv_conf_is_stub
 check udp-and-tcp-stub python3 "$ROOT/scripts/probe-stub.py" "$PROBE_NAME"
 check native-varlink-query native_varlink_query
-check dbus-application-bridge dbus_bridge_query
 check nss-getent getent ahosts "$PROBE_NAME"
 check localhost getent ahosts localhost
 

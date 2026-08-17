@@ -12,12 +12,22 @@ impl Config {
         let credentials_present =
             may_read_external_configuration && apply_credentials_from_environment(&mut config);
         if may_read_external_configuration && !credentials_present {
-            let discovered = discover_resolv_conf_state(Path::new("/etc/resolv.conf"))?;
-            if config.upstreams.is_empty() {
-                config.upstreams = discovered.servers;
-            }
-            if config.domains.is_empty() {
-                config.domains = discovered.domains;
+            // Prefer real uplink sources. /etc/resolv.conf is often already our stub.
+            for candidate in [
+                Path::new("/run/NetworkManager/resolv.conf"),
+                Path::new("/run/rustd/resolve/resolv.conf"),
+                Path::new("/etc/resolv.conf"),
+            ] {
+                let discovered = discover_resolv_conf_state(candidate)?;
+                if config.upstreams.is_empty() && !discovered.servers.is_empty() {
+                    config.upstreams = discovered.servers;
+                }
+                if config.domains.is_empty() && !discovered.domains.is_empty() {
+                    config.domains = discovered.domains;
+                }
+                if !config.upstreams.is_empty() {
+                    break;
+                }
             }
         }
         config.dns_delegates = crate::dns_delegate::load_system();

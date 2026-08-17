@@ -50,7 +50,7 @@ mod test_29_idna_questions {
                 "bücher.example",
                 2,
                 None,
-                crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_SEARCH,
+                crate::resolve_flags::flags::RUSTD_RESOLVE_NO_SEARCH,
             )
             .expect("IDNA hostname lookup");
         assert_eq!(lookup.canonical_name, "xn--bcher-kva.example");

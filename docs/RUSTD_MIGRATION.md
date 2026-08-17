@@ -13,7 +13,7 @@ protocol owned by RustD rather than a drop-in replacement for another resolver.
    `io.rustd.Resolve.Monitor`.
 4. Packaging rejects systemd-owned executable and runtime roots.
 5. The release gate includes Rust/native/NSS/formal/live/reproducibility checks.
-6. CI includes native DNS/Varlink/D-Bus integration, parser fuzzing, restart
+6. CI includes native DNS/Varlink integration, parser fuzzing, restart
    soak, and live mDNS/Avahi interoperability.
 7. Installed-system certification uses `rustctl`, the RustD service identity,
    RustD runtime paths, and `rustd-resolvectl`.
@@ -22,22 +22,15 @@ protocol owned by RustD rather than a drop-in replacement for another resolver.
 
 ## Remaining internal conversion
 
-The private shared Varlink dispatcher and parts of the CLI implementation still
-carry `io.systemd.*` identifiers inherited from the earlier compatibility core.
-Those identifiers must move to RustD ownership atomically with their interface
-definitions, dispatcher methods, monitor path, NSS client, CLI calls, tests, and
-error mapping. The public `io.rustd.*` frontend remains the supported native
-surface during that conversion.
-
-The `org.freedesktop.resolve1` D-Bus API is a separate interoperability surface
-for Linux applications. Keeping that public freedesktop contract does not make
-systemd the resolver architecture or release oracle.
+The native daemon now dispatches `io.rustd.*` directly and installs no D-Bus
+activation, policy, or service files. The former D-Bus implementation remains
+as unexported source pending a later source-tree deletion; it is not compiled,
+started, installed, or part of the supported control protocol.
 
 ## Production boundary
 
 Migration is complete only when:
 
-- the private dispatcher no longer canonicalizes through `io.systemd.*`;
 - no shipped command, service, runtime path, package rule, or operational
   procedure depends on systemd-owned names;
 - `rustd-resolvectl` is natively identified throughout its implementation;

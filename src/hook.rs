@@ -557,7 +557,7 @@ mod tests {
     fn hook_answer_preempts_regular_resolution() {
         let temporary = tempdir().expect("temporary directory");
         let socket = temporary.path().join("10-test");
-        let listener = UnixListener::bind(&socket).expect("hook listener");
+        let listener = UnixListener::bind(socket).expect("hook listener");
         let query = make_query("hook.example", TYPE_A, 0x7171).expect("query");
         let source = local_response(&query, &[LocalRecord::A(Ipv4Addr::new(192, 0, 2, 44))], 45)
             .expect("source response");
@@ -629,7 +629,7 @@ mod tests {
     fn malformed_or_uninterested_hooks_fail_open() {
         let temporary = tempdir().expect("temporary directory");
         let socket = temporary.path().join("20-filtered");
-        let listener = UnixListener::bind(&socket).expect("hook listener");
+        let listener = UnixListener::bind(socket).expect("hook listener");
         let server = thread::spawn(move || {
             let (mut filter, _) = listener.accept().expect("filter connection");
             let _ = read_request(&mut filter);
@@ -665,7 +665,7 @@ mod tests {
     fn grouped_questions_are_idna_first_and_deduplicated() {
         let temporary = tempdir().expect("temporary directory");
         let socket = temporary.path().join("30-grouped");
-        let listener = UnixListener::bind(&socket).expect("hook listener");
+        let listener = UnixListener::bind(socket).expect("hook listener");
         let server = thread::spawn(move || {
             let (mut filter, _) = listener.accept().expect("filter connection");
             let _ = read_request(&mut filter);

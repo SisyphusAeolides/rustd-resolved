@@ -1,16 +1,31 @@
 [Unit]
 Description=RustD Network Name Resolver
-After=rustd-sysusers.service network-pre.target
-Before=network.target nss-lookup.target
-Wants=nss-lookup.target
+Documentation=man:rustd-resolved(8)
 Conflicts=systemd-resolved.service
+After=rustd-sysusers.service network-pre.target
+Before=network.target nss-lookup.target multi-user.target
+Wants=nss-lookup.target
 
 [Service]
 Type=notify
-# Own org.freedesktop.resolve1 when replacing systemd-resolved.
-ExecStart=/usr/lib/rustd/rustd-resolved --dbus
-Restart=always
+ExecStart=/usr/lib/rustd/rustd-resolved
+Restart=on-failure
 RestartSec=1s
+LimitNOFILE=524288
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+ReadWritePaths=/run/rustd
+RuntimeDirectory=rustd/resolve
+RuntimeDirectoryMode=0755
 
 [Install]
 WantedBy=sysinit.target
+Also=nss-lookup.target

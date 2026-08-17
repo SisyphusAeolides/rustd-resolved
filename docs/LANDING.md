@@ -27,13 +27,16 @@ managing `rustd-resolved.service`, then run:
 ```sh
 rustctl status rustd-resolved.service
 rustd-resolvectl status
+make certify-smoke
 make certify
 ```
 
 `make certify` reruns the release gate and then checks the installed native
 service, daemon PID/executable, `io.rustd.Resolve` socket, resolver runtime files,
-UDP/TCP stub, native Varlink query, NSS, localhost, and the public D-Bus
-interoperability bridge.
+UDP/TCP stub, native Varlink query, NSS, and localhost. It also runs installed certification in release mode,
+which fails if network-emulation gates are still pending. Use
+`make certify-smoke` for an installed smoke pass that records those gates as
+pending without treating the smoke run as release evidence.
 
 ## Performance evidence
 

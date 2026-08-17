@@ -38,7 +38,6 @@ use std::time::{Duration, Instant, SystemTime};
 
 use bytes::{BufMut, Bytes, BytesMut};
 use parking_lot::{Mutex, RwLock};
-use rand::Rng;
 use thiserror::Error;
 use tokio::sync::{broadcast, Semaphore};
 use tokio::time::{sleep, timeout};
@@ -972,7 +971,7 @@ impl SpeculativePool {
                 if child.is_cancelled() {
                     return;
                 }
-                let id: u16 = rand::thread_rng().gen();
+                let id: u16 = rand::random();
                 let mut q = BytesMut::from(qbase.as_ref());
                 if q.len() >= 2 {
                     q[0] = (id >> 8) as u8;
@@ -1227,7 +1226,7 @@ impl TrustAdValidator {
             let mut saw_insecure_chain = false;
             for signature in signatures {
                 let parsed = crate::wire::parse_rrsig(packet, signature)
-                    .map_err(|error| HyperError::DnssecBogus)?;
+                    .map_err(|_error| HyperError::DnssecBogus)?;
                 if parsed.type_covered != rr_type {
                     continue;
                 }
@@ -1378,7 +1377,7 @@ impl TrustAdValidator {
             Ok(crate::resolver::DnssecVerdict::Secure) => Ok(DnssecState::Secure),
             Ok(crate::resolver::DnssecVerdict::Insecure) => Ok(DnssecState::Insecure),
             Ok(crate::resolver::DnssecVerdict::NotValidated) => Ok(DnssecState::Indeterminate),
-            Err(error) => Err(HyperError::DnssecBogus),
+            Err(_error) => Err(HyperError::DnssecBogus),
         }
     }
 
@@ -1552,7 +1551,7 @@ impl TrustAdValidator {
         rr_type: u16,
         context: &DnssecQueryContext,
     ) -> HResult<Vec<u8>> {
-        let id = rand::thread_rng().gen::<u16>();
+        let id = rand::random::<u16>();
         let owner_wire =
             crate::wire::encode_name(owner).map_err(|error| HyperError::Wire(error.to_string()))?;
         let owner = NameKey::from_wire_uncompressed(&owner_wire)?;
@@ -1580,7 +1579,7 @@ impl TrustAdValidator {
                 Ok(false) => {}
                 Err(crate::dnssec::DnssecError::UnsupportedAlgorithm(_))
                 | Err(crate::dnssec::DnssecError::UnsupportedDigest(_)) => {}
-                Err(error) => return Err(HyperError::DnssecBogus),
+                Err(_error) => return Err(HyperError::DnssecBogus),
             }
         }
         Ok(false)
@@ -2092,7 +2091,7 @@ impl HyperResolver {
             }
             chain.push(current.clone());
 
-            let id: u16 = rand::thread_rng().gen();
+            let id: u16 = rand::random();
             let q = QueryBuilder::new(id, &current, key.qtype, key.qclass).finish();
 
             let ups = self.upstreams.read().clone();
@@ -2581,7 +2580,7 @@ mod hyper_dnssec_tests {
             &[],
             &[],
         );
-        let validator = TrustAdValidator::default();
+        let validator = TrustAdValidator;
 
         assert_eq!(
             validator
@@ -2615,7 +2614,7 @@ mod hyper_dnssec_tests {
             &[],
         );
         assert_eq!(
-            TrustAdValidator::default()
+            TrustAdValidator
                 .validate(&qname, TYPE_A, &packet_view(&packet), DnssecMode::Yes)
                 .await
                 .expect("checking-disabled result"),
@@ -2634,7 +2633,7 @@ mod hyper_dnssec_tests {
             &[],
             &[],
         );
-        let validator = TrustAdValidator::default();
+        let validator = TrustAdValidator;
         assert_eq!(
             validator
                 .validate(
@@ -2670,7 +2669,7 @@ mod hyper_dnssec_tests {
             &[],
             &[dnskey_record()],
         );
-        let validator = TrustAdValidator::default();
+        let validator = TrustAdValidator;
         for mode in [DnssecMode::AllowDowngrade, DnssecMode::Yes] {
             assert!(matches!(
                 validator
@@ -2729,7 +2728,7 @@ mod hyper_dnssec_tests {
             &[],
         );
         assert_eq!(
-            TrustAdValidator::default()
+            TrustAdValidator
                 .validate(
                     &qname,
                     TYPE_A,
@@ -2880,7 +2879,7 @@ mod hyper_dnssec_tests {
         )
         .expect("DNSKEY signature check"));
         assert_eq!(
-            TrustAdValidator::default()
+            TrustAdValidator
                 .validate_anchored(&qname, TYPE_A, &packet, DnssecMode::Yes, &anchors, &context,)
                 .await
                 .expect("anchored validation"),
@@ -2895,7 +2894,7 @@ mod hyper_dnssec_tests {
         let mut forged_answer = packet.clone();
         forged_answer[answer.rdata_offset] ^= 1;
         assert!(matches!(
-            TrustAdValidator::default()
+            TrustAdValidator
                 .validate_anchored(
                     &qname,
                     TYPE_A,
@@ -2915,7 +2914,7 @@ mod hyper_dnssec_tests {
         let mut forged_chain = packet;
         forged_chain[dnskey_record.rdata_offset + 4] ^= 1;
         assert!(matches!(
-            TrustAdValidator::default()
+            TrustAdValidator
                 .validate_anchored(
                     &qname,
                     TYPE_A,
@@ -3028,7 +3027,7 @@ mod hyper_dnssec_tests {
             },
         }];
         assert_eq!(
-            TrustAdValidator::default()
+            TrustAdValidator
                 .validate_anchored(
                     &qname,
                     TYPE_A,
@@ -3097,7 +3096,7 @@ mod hyper_dnssec_tests {
             ..context
         };
         assert!(matches!(
-            TrustAdValidator::default()
+            TrustAdValidator
                 .validate_anchored(
                     &qname,
                     TYPE_A,
@@ -3146,7 +3145,7 @@ mod hyper_dnssec_tests {
             timeout: Duration::from_secs(1),
         };
         assert_eq!(
-            TrustAdValidator::default()
+            TrustAdValidator
                 .validate_anchored(&qname, TYPE_A, &packet, DnssecMode::Yes, &anchors, &context,)
                 .await
                 .expect("transport failure is indeterminate"),
@@ -3207,7 +3206,7 @@ mod hyper_dnssec_tests {
             timeout: Duration::from_secs(1),
         };
         assert_eq!(
-            TrustAdValidator::default()
+            TrustAdValidator
                 .validate_anchored(&qname, TYPE_A, &packet, DnssecMode::Yes, &anchors, &context,)
                 .await
                 .expect("authenticated NXDOMAIN"),
@@ -3238,7 +3237,7 @@ mod hyper_dnssec_tests {
             .collect::<Vec<_>>();
         let missing_packet = response(0x8000 | 0x0003, &qname, TYPE_A, &[], &missing_proof, &[]);
         assert!(matches!(
-            TrustAdValidator::default()
+            TrustAdValidator
                 .validate_anchored(
                     &qname,
                     TYPE_A,

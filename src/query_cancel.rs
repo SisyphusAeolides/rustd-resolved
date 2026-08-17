@@ -5,7 +5,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 thread_local! {
-    #[allow(clippy::missing_const_for_thread_local)]
     static CURRENT: RefCell<Option<QueryCancellation>> = RefCell::new(None);
 }
 

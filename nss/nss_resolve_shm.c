@@ -80,7 +80,7 @@ static int multiply_u64(uint64_t left, uint64_t right, uint64_t *result)
 
 static const char *shared_memory_path(void)
 {
-    const char *value = secure_getenv("RUSTD_NSS_RESOLVE_SHM");
+    const char *value = secure_getenv("RUSTD_NSS_DNS_SHM");
     if (!value || !*value) {
         errno = ENOENT;
         return NULL;

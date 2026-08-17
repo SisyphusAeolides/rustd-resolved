@@ -16,16 +16,16 @@ mod test_01_localhost_is_answered_without_an_upstream {
             wire::extract_addresses(&response, Some(2)).expect("address"),
             vec![IpAddr::V4(Ipv4Addr::LOCALHOST)]
         );
-        use crate::dbus_resolve1_abi::flags::{
-            SD_RESOLVED_AUTHENTICATED, SD_RESOLVED_CONFIDENTIAL, SD_RESOLVED_DNS,
-            SD_RESOLVED_SYNTHETIC,
+        use crate::resolve_flags::flags::{
+            RUSTD_RESOLVE_AUTHENTICATED, RUSTD_RESOLVE_CONFIDENTIAL, RUSTD_RESOLVE_DNS,
+            RUSTD_RESOLVE_SYNTHETIC,
         };
         assert_eq!(
             flags,
-            SD_RESOLVED_DNS
-                | SD_RESOLVED_AUTHENTICATED
-                | SD_RESOLVED_CONFIDENTIAL
-                | SD_RESOLVED_SYNTHETIC
+            RUSTD_RESOLVE_DNS
+                | RUSTD_RESOLVE_AUTHENTICATED
+                | RUSTD_RESOLVE_CONFIDENTIAL
+                | RUSTD_RESOLVE_SYNTHETIC
         );
     }
 

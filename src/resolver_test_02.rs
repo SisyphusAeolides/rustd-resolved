@@ -148,4 +148,72 @@ mod test_02_lookup_and_server_failover {
         refused_worker.join().expect("refusing DNS worker");
         success_worker.join().expect("succeeding DNS worker");
     }
+
+    #[test]
+    fn servfail_then_success_reaches_upstream_again() {
+        use std::thread;
+
+        let socket = UdpSocket::bind("127.0.0.1:0").expect("bind test DNS server");
+        socket
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("set mock DNS timeout");
+        let server = socket.local_addr().expect("test DNS server address");
+        let worker = thread::spawn(move || {
+            let mut buffer = [0; 2048];
+
+            let (length, peer) = socket.recv_from(&mut buffer).expect("receive first query");
+            let mut response =
+                local_response(&buffer[..length], &[], 0).expect("SERVFAIL response");
+            let flags = u16::from_be_bytes([response[2], response[3]]);
+            response[2..4].copy_from_slice(&((flags & !0x000f) | 2).to_be_bytes());
+            socket
+                .send_to(&response, peer)
+                .expect("send SERVFAIL response");
+
+            let (length, peer) = socket
+                .recv_from(&mut buffer)
+                .expect("second query must reach upstream");
+            let response = local_response(
+                &buffer[..length],
+                &[crate::wire::LocalRecord::A(Ipv4Addr::new(192, 0, 2, 88))],
+                30,
+            )
+            .expect("success response");
+            socket
+                .send_to(&response, peer)
+                .expect("send success response");
+        });
+
+        let resolver = Resolver::new(Config {
+            upstreams: vec![server],
+            fallback_upstreams: Vec::new(),
+            query_timeout: Duration::from_secs(1),
+            attempts: 1,
+            cache: true,
+            cache_from_localhost: true,
+            read_etc_hosts: false,
+            read_static_records: false,
+            dnssec: ValidationMode::No,
+            ..Config::default()
+        });
+        resolver.downgrade_feature(
+            ServerKey::new(ScopeKind::Global, server),
+            FeatureLevel::Udp,
+        );
+        let query = make_query("transient.example.test", TYPE_A, 0x7400).expect("client query");
+        let first = resolver
+            .query(&query, QueryMode::Full)
+            .expect("SERVFAIL response");
+        assert_eq!(Header::parse(&first).expect("SERVFAIL header").response_code(), 2);
+
+        let second = resolver
+            .query(&query, QueryMode::Full)
+            .expect("retry succeeds");
+        let records = extract_address_records(&second, Some(2)).expect("address records");
+        assert_eq!(
+            records.addresses,
+            vec![IpAddr::V4(Ipv4Addr::new(192, 0, 2, 88))]
+        );
+        worker.join().expect("test DNS worker");
+    }
 }

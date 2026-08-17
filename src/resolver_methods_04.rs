@@ -368,7 +368,7 @@ impl Resolver {
             10 => &[TYPE_AAAA],
             _ => return Err(ResolveError::UnsupportedFamily(family)),
         };
-        if request_flags & crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_SYNTHESIZE == 0
+        if request_flags & crate::resolve_flags::flags::RUSTD_RESOLVE_NO_SYNTHESIZE == 0
             && self.has_local_name(name, types)?
         {
             return self.lookup_name_exact(name, types, ifindex, request_flags);
@@ -376,7 +376,7 @@ impl Resolver {
 
         let domains = self.search_domains(ifindex)?;
         let candidates = if request_flags
-            & crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_SEARCH
+            & crate::resolve_flags::flags::RUSTD_RESOLVE_NO_SEARCH
             != 0
         {
             vec![name.to_owned()]
@@ -386,7 +386,7 @@ impl Resolver {
                 &domains,
                 self.config().resolve_unicast_single_label
                     || request_flags
-                        & crate::dbus_resolve1_abi::flags::SD_RESOLVED_RELAX_SINGLE_LABEL
+                        & crate::resolve_flags::flags::RUSTD_RESOLVE_RELAX_SINGLE_LABEL
                         != 0,
             )
         };

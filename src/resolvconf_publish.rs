@@ -263,7 +263,7 @@ impl ResolvConfPublisher {
 
     pub fn remove_link_snapshot(&self, ifindex: i32) -> io::Result<()> {
         let path = self.run_dir.join("netif").join(format!("{ifindex}"));
-        match fs::remove_file(&path) {
+        match fs::remove_file(path) {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
             Err(e) => Err(e),

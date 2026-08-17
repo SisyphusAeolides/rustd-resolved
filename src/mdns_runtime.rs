@@ -36,17 +36,17 @@ const TYPE_SRV: u16 = 33;
 const TYPE_DNAME: u16 = 39;
 const TYPE_NSEC: u16 = 47;
 const TYPE_ANY: u16 = 255;
-const SD_RESOLVED_DNS: u64 = 1 << 0;
-const SD_RESOLVED_LLMNR_IPV4: u64 = 1 << 1;
-const SD_RESOLVED_LLMNR_IPV6: u64 = 1 << 2;
-const SD_RESOLVED_MDNS_IPV4: u64 = 1 << 3;
-const SD_RESOLVED_MDNS_IPV6: u64 = 1 << 4;
-const SD_RESOLVED_PROTOCOLS_ALL: u64 = SD_RESOLVED_DNS
-    | SD_RESOLVED_LLMNR_IPV4
-    | SD_RESOLVED_LLMNR_IPV6
-    | SD_RESOLVED_MDNS_IPV4
-    | SD_RESOLVED_MDNS_IPV6;
-const SD_RESOLVED_NO_NETWORK: u64 = 1 << 15;
+const RUSTD_RESOLVE_DNS: u64 = 1 << 0;
+const RUSTD_RESOLVE_LLMNR_IPV4: u64 = 1 << 1;
+const RUSTD_RESOLVE_LLMNR_IPV6: u64 = 1 << 2;
+const RUSTD_RESOLVE_MDNS_IPV4: u64 = 1 << 3;
+const RUSTD_RESOLVE_MDNS_IPV6: u64 = 1 << 4;
+const RUSTD_RESOLVE_PROTOCOLS_ALL: u64 = RUSTD_RESOLVE_DNS
+    | RUSTD_RESOLVE_LLMNR_IPV4
+    | RUSTD_RESOLVE_LLMNR_IPV6
+    | RUSTD_RESOLVE_MDNS_IPV4
+    | RUSTD_RESOLVE_MDNS_IPV6;
+const RUSTD_RESOLVE_NO_NETWORK: u64 = 1 << 15;
 const IFA_F_DADFAILED: u32 = 0x08;
 const IFA_F_TENTATIVE: u32 = 0x40;
 const RESPONSE_SETTLE_TIME: Duration = Duration::from_millis(120);
@@ -234,10 +234,10 @@ impl MdnsBrowser {
             })?),
             None => None,
         };
-        let protocol_flags = flags & SD_RESOLVED_PROTOCOLS_ALL;
-        let allow_ipv4 = protocol_flags == 0 || flags & SD_RESOLVED_MDNS_IPV4 != 0;
-        let allow_ipv6 = protocol_flags == 0 || flags & SD_RESOLVED_MDNS_IPV6 != 0;
-        let discovered = if flags & SD_RESOLVED_NO_NETWORK != 0 {
+        let protocol_flags = flags & RUSTD_RESOLVE_PROTOCOLS_ALL;
+        let allow_ipv4 = protocol_flags == 0 || flags & RUSTD_RESOLVE_MDNS_IPV4 != 0;
+        let allow_ipv6 = protocol_flags == 0 || flags & RUSTD_RESOLVE_MDNS_IPV6 != 0;
+        let discovered = if flags & RUSTD_RESOLVE_NO_NETWORK != 0 {
             Vec::new()
         } else {
             interfaces()?
@@ -1502,7 +1502,7 @@ mod tests {
             "_testservice0._udp.local",
             None,
             None,
-            SD_RESOLVED_NO_NETWORK,
+            RUSTD_RESOLVE_NO_NETWORK,
         )
         .expect("browser");
         let owner = browse_owner("_testservice0._udp.local").expect("owner");
@@ -1520,7 +1520,7 @@ mod tests {
             "_testservice0._udp.local.",
             None,
             None,
-            SD_RESOLVED_NO_NETWORK,
+            RUSTD_RESOLVE_NO_NETWORK,
         )
         .expect("browser");
         let owner = browse_owner("_testservice0._udp.local.").expect("owner");
@@ -1538,7 +1538,7 @@ mod tests {
             "_TESTSERVICE0._UDP.local...",
             None,
             None,
-            SD_RESOLVED_NO_NETWORK,
+            RUSTD_RESOLVE_NO_NETWORK,
         )
         .expect("browser");
         let owner = browse_owner("_testservice0._udp.local").expect("owner");
@@ -1552,7 +1552,7 @@ mod tests {
 
     #[test]
     fn browser_constructor_root_domain_stays_root() {
-        let browser = MdnsBrowser::new(".", None, None, SD_RESOLVED_NO_NETWORK).expect("browser");
+        let browser = MdnsBrowser::new(".", None, None, RUSTD_RESOLVE_NO_NETWORK).expect("browser");
         assert_eq!(browser.domain, ".");
         assert_eq!(
             browser.requested_type.as_deref(),

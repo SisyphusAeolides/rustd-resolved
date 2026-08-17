@@ -637,7 +637,7 @@ fn expand_specifiers(
                 return Err(parse_error(
                     path,
                     line,
-                    &format!("unsupported percent specifier %{other}"),
+                    format!("unsupported percent specifier %{other}"),
                 ))
             }
         }

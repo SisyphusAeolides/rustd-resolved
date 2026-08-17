@@ -53,10 +53,10 @@ pub struct StaticRecords {
 
 impl StaticRecords {
     pub fn system(enabled: bool) -> Self {
-        let mut directories = crate::native_paths::static_record_directories();
-        #[cfg(feature = "systemd-compat-paths")]
-        directories.extend(crate::native_paths::static_record_directories_compat());
-        Self::new(enabled, directories)
+        Self::new(
+            enabled,
+            crate::native_paths::static_record_directories(),
+        )
     }
 
     pub fn new(enabled: bool, directories: Vec<PathBuf>) -> Self {
@@ -140,7 +140,6 @@ mod system_path_tests {
                 || path.starts_with("/usr/local/lib/rustd/")
                 || path.starts_with("/run/rustd/")
                 || path.starts_with("/etc/rustd/")
-                || cfg!(feature = "systemd-compat-paths")
         }));
     }
 }

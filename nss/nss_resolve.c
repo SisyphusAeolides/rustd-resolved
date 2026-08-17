@@ -392,7 +392,7 @@ static enum nss_status gethostbyname4_impl(
     return status;
 }
 
-enum nss_status _nss_resolve_gethostbyname4_r(
+enum nss_status _nss_rustd_dns_gethostbyname4_r(
     const char *name,
     struct gaih_addrtuple **pat,
     char *buffer, size_t buffer_length,
@@ -438,7 +438,7 @@ static enum nss_status gethostbyname3_impl(
     return status;
 }
 
-enum nss_status _nss_resolve_gethostbyname3_r(
+enum nss_status _nss_rustd_dns_gethostbyname3_r(
     const char *name, int family,
     struct hostent *result, char *buffer, size_t buffer_length,
     int *errnop, int *h_errnop, int32_t *ttlp, char **canonp)
@@ -455,27 +455,27 @@ enum nss_status _nss_resolve_gethostbyname3_r(
     return status;
 }
 
-enum nss_status _nss_resolve_gethostbyname2_r(
+enum nss_status _nss_rustd_dns_gethostbyname2_r(
     const char *name, int family,
     struct hostent *result, char *buffer, size_t buffer_length,
     int *errnop, int *h_errnop)
 {
-    return _nss_resolve_gethostbyname3_r(name, family, result, buffer, buffer_length,
+    return _nss_rustd_dns_gethostbyname3_r(name, family, result, buffer, buffer_length,
                                          errnop, h_errnop, NULL, NULL);
 }
 
-enum nss_status _nss_resolve_gethostbyname_r(
+enum nss_status _nss_rustd_dns_gethostbyname_r(
     const char *name,
     struct hostent *result, char *buffer, size_t buffer_length,
     int *errnop, int *h_errnop)
 {
     enum nss_status status = NSS_STATUS_NOTFOUND;
     if (_res.options & DEPRECATED_RES_USE_INET6)
-        status = _nss_resolve_gethostbyname3_r(
+        status = _nss_rustd_dns_gethostbyname3_r(
             name, AF_INET6, result, buffer, buffer_length,
             errnop, h_errnop, NULL, NULL);
     if (status == NSS_STATUS_NOTFOUND)
-        status = _nss_resolve_gethostbyname3_r(
+        status = _nss_rustd_dns_gethostbyname3_r(
             name, AF_INET, result, buffer, buffer_length,
             errnop, h_errnop, NULL, NULL);
     return status;
@@ -580,7 +580,7 @@ static enum nss_status gethostbyaddr2_impl(
     return status;
 }
 
-enum nss_status _nss_resolve_gethostbyaddr2_r(
+enum nss_status _nss_rustd_dns_gethostbyaddr2_r(
     const void *address, socklen_t address_length, int family,
     struct hostent *result, char *buffer, size_t buffer_length,
     int *errnop, int *h_errnop, int32_t *ttlp)
@@ -597,12 +597,12 @@ enum nss_status _nss_resolve_gethostbyaddr2_r(
     return status;
 }
 
-enum nss_status _nss_resolve_gethostbyaddr_r(
+enum nss_status _nss_rustd_dns_gethostbyaddr_r(
     const void *address, socklen_t address_length, int family,
     struct hostent *result, char *buffer, size_t buffer_length,
     int *errnop, int *h_errnop)
 {
-    return _nss_resolve_gethostbyaddr2_r(address, address_length, family,
+    return _nss_rustd_dns_gethostbyaddr2_r(address, address_length, family,
                                          result, buffer, buffer_length,
                                          errnop, h_errnop, NULL);
 }

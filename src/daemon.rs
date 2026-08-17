@@ -133,8 +133,8 @@ struct Watchdog {
 
 impl Watchdog {
     fn from_environment() -> Option<Self> {
-        let usec = env::var("WATCHDOG_USEC").ok();
-        let pid = env::var("WATCHDOG_PID").ok();
+        let usec = env::var("RUSTD_WATCHDOG_USEC").ok();
+        let pid = env::var("RUSTD_WATCHDOG_PID").ok();
         let interval = watchdog_interval(usec.as_deref(), pid.as_deref(), std::process::id())?;
         let next = Instant::now().checked_add(interval)?;
         Some(Self { interval, next })
@@ -293,7 +293,6 @@ fn bind_endpoints(
     mode: QueryMode,
     udp_enabled: bool,
     tcp_enabled: bool,
-    ignore_addr_in_use: bool,
     udp_endpoints: &mut Vec<UdpEndpoint>,
     tcp_endpoints: &mut Vec<TcpEndpoint>,
 ) -> io::Result<()> {
@@ -307,7 +306,6 @@ fn bind_endpoints(
                         mode,
                     });
                 }
-                Err(error) if ignore_addr_in_use && error.kind() == io::ErrorKind::AddrInUse => {}
                 Err(error) => return Err(error),
             }
         }
@@ -321,7 +319,6 @@ fn bind_endpoints(
                         mode,
                     });
                 }
-                Err(error) if ignore_addr_in_use && error.kind() == io::ErrorKind::AddrInUse => {}
                 Err(error) => return Err(error),
             }
         }
@@ -338,7 +335,6 @@ fn bind_configured_endpoints(config: &Config) -> io::Result<(Vec<UdpEndpoint>, V
         QueryMode::Full,
         stub_mode.udp_enabled(),
         stub_mode.tcp_enabled(),
-        true,
         &mut udp_endpoints,
         &mut tcp_endpoints,
     )?;
@@ -347,7 +343,6 @@ fn bind_configured_endpoints(config: &Config) -> io::Result<(Vec<UdpEndpoint>, V
         QueryMode::Proxy,
         stub_mode.udp_enabled(),
         stub_mode.tcp_enabled(),
-        true,
         &mut udp_endpoints,
         &mut tcp_endpoints,
     )?;
@@ -357,7 +352,6 @@ fn bind_configured_endpoints(config: &Config) -> io::Result<(Vec<UdpEndpoint>, V
             QueryMode::Full,
             listener.udp_enabled(),
             listener.tcp_enabled(),
-            false,
             &mut udp_endpoints,
             &mut tcp_endpoints,
         )?;
@@ -553,64 +547,34 @@ mod tests {
     }
 
     #[test]
-    fn occupied_primary_udp_socket_is_ignored() {
-        let occupied = UdpSocket::bind("127.0.0.1:0").expect("occupy UDP address");
+    fn occupied_primary_udp_socket_prevents_startup() {
+        let occupied = UdpSocket::bind("127.0.0.53:0").expect("occupy stub UDP address");
         let address = occupied.local_addr().expect("occupied UDP address");
-        let mut udp_endpoints = Vec::new();
-        let mut tcp_endpoints = Vec::new();
-        bind_endpoints(
-            &[address],
-            QueryMode::Full,
-            true,
-            false,
-            true,
-            &mut udp_endpoints,
-            &mut tcp_endpoints,
-        )
-        .expect("ignore occupied primary UDP socket");
-        assert!(udp_endpoints.is_empty());
-
-        let error = bind_endpoints(
-            &[address],
-            QueryMode::Full,
-            true,
-            false,
-            false,
-            &mut udp_endpoints,
-            &mut tcp_endpoints,
-        )
-        .expect_err("explicit occupied UDP socket must fail");
+        let config = Config {
+            listeners: vec![address],
+            proxy_listeners: Vec::new(),
+            dns_stub_listener: crate::config::DnsStubListenerMode::Udp,
+            dns_stub_listener_extra: Vec::new(),
+            ..Config::default()
+        };
+        let error = bind_configured_endpoints(&config)
+            .expect_err("occupied required UDP socket must prevent startup");
         assert_eq!(error.kind(), io::ErrorKind::AddrInUse);
     }
 
     #[test]
-    fn occupied_primary_tcp_socket_is_ignored() {
-        let occupied = TcpListener::bind("127.0.0.1:0").expect("occupy TCP address");
+    fn occupied_primary_tcp_socket_prevents_startup() {
+        let occupied = TcpListener::bind("127.0.0.53:0").expect("occupy stub TCP address");
         let address = occupied.local_addr().expect("occupied TCP address");
-        let mut udp_endpoints = Vec::new();
-        let mut tcp_endpoints = Vec::new();
-        bind_endpoints(
-            &[address],
-            QueryMode::Full,
-            false,
-            true,
-            true,
-            &mut udp_endpoints,
-            &mut tcp_endpoints,
-        )
-        .expect("ignore occupied primary TCP socket");
-        assert!(tcp_endpoints.is_empty());
-
-        let error = bind_endpoints(
-            &[address],
-            QueryMode::Full,
-            false,
-            true,
-            false,
-            &mut udp_endpoints,
-            &mut tcp_endpoints,
-        )
-        .expect_err("explicit occupied TCP socket must fail");
+        let config = Config {
+            listeners: vec![address],
+            proxy_listeners: Vec::new(),
+            dns_stub_listener: crate::config::DnsStubListenerMode::Tcp,
+            dns_stub_listener_extra: Vec::new(),
+            ..Config::default()
+        };
+        let error = bind_configured_endpoints(&config)
+            .expect_err("occupied required TCP socket must prevent startup");
         assert_eq!(error.kind(), io::ErrorKind::AddrInUse);
     }
 

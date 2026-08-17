@@ -218,16 +218,16 @@ pub async fn run(landing: LandingConfig) -> anyhow::Result<()> {
             loop {
                 iv.tick().await;
                 if lifecycle::stop_requested() {
-                    lifecycle::sd_notify_stopping();
+                    lifecycle::rustd_notify_stopping();
                     break;
                 }
                 if lifecycle::take_reload() {
-                    lifecycle::sd_notify_status("reloading");
+                    lifecycle::rustd_notify_status("reloading");
                     st.reload_hosts(&hosts_path);
                     st.flush_all();
                     crate::static_records::invalidate_system();
                     st.republish_resolv();
-                    lifecycle::sd_notify_status("running");
+                    lifecycle::rustd_notify_status("running");
                 }
                 if lifecycle::take_flush() {
                     st.flush_all();
@@ -240,8 +240,8 @@ pub async fn run(landing: LandingConfig) -> anyhow::Result<()> {
         });
     }
 
-    lifecycle::sd_notify_ready();
-    lifecycle::sd_notify_status("running");
+    lifecycle::rustd_notify_ready();
+    lifecycle::rustd_notify_status("running");
     info!(
         stub = %landing.stub_addr,
         workers = landing.workers,
@@ -286,6 +286,6 @@ pub async fn run(landing: LandingConfig) -> anyhow::Result<()> {
 
     // Block on primary dataplane
     let result = dp.run().await;
-    lifecycle::sd_notify_stopping();
+    lifecycle::rustd_notify_stopping();
     result.map_err(|e| anyhow::anyhow!("dataplane: {e}"))
 }

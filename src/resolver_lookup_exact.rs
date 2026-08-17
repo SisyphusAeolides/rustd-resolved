@@ -42,7 +42,7 @@ impl Resolver {
                             if grouped_hook_checked {
                                 self.query_following_redirects_dual_after_grouped_hook(
                                     name,
-                                    &unicast_name,
+                                    unicast_name,
                                     wire::CLASS_IN,
                                     rr_type,
                                     ifindex,
@@ -51,7 +51,7 @@ impl Resolver {
                             } else {
                                 self.query_following_redirects_dual(
                                     name,
-                                    &unicast_name,
+                                    unicast_name,
                                     wire::CLASS_IN,
                                     rr_type,
                                     ifindex,
@@ -142,7 +142,7 @@ impl Resolver {
         types: &[u16],
         request_flags: u64,
     ) -> Result<bool, ResolveError> {
-        if request_flags & crate::dbus_resolve1_abi::flags::SD_RESOLVED_NO_SYNTHESIZE != 0 {
+        if request_flags & crate::resolve_flags::flags::RUSTD_RESOLVE_NO_SYNTHESIZE != 0 {
             return Ok(false);
         }
         let config = self.config();

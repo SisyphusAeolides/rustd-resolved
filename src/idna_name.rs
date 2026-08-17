@@ -103,7 +103,7 @@ pub fn validate_ascii_domain(name: &str) -> bool {
 }
 
 pub fn cow_ascii_lower(s: &str) -> Cow<'_, str> {
-    if s.bytes().any(|b| (b'A'..=b'Z').contains(&b)) {
+    if s.bytes().any(|b| b.is_ascii_uppercase()) {
         Cow::Owned(s.to_ascii_lowercase())
     } else {
         Cow::Borrowed(s)

@@ -13,24 +13,24 @@
 
 #include "nss_resolve_shm.h"
 
-extern enum nss_status _nss_resolve_gethostbyname4_r(
+extern enum nss_status _nss_rustd_dns_gethostbyname4_r(
     const char *name,
     struct gaih_addrtuple **pat,
     char *buffer, size_t buffer_length,
     int *errnop, int *h_errnop,
     int32_t *ttlp);
 
-extern enum nss_status _nss_resolve_gethostbyname2_r(
+extern enum nss_status _nss_rustd_dns_gethostbyname2_r(
     const char *name, int family,
     struct hostent *result, char *buffer, size_t buffer_length,
     int *errnop, int *h_errnop);
 
-extern enum nss_status _nss_resolve_gethostbyname_r(
+extern enum nss_status _nss_rustd_dns_gethostbyname_r(
     const char *name,
     struct hostent *result, char *buffer, size_t buffer_length,
     int *errnop, int *h_errnop);
 
-extern enum nss_status _nss_resolve_gethostbyaddr2_r(
+extern enum nss_status _nss_rustd_dns_gethostbyaddr2_r(
     const void *address, socklen_t address_length, int family,
     struct hostent *result, char *buffer, size_t buffer_length,
     int *errnop, int *h_errnop, int32_t *ttlp);
@@ -54,7 +54,7 @@ static void require_status(enum nss_status actual, enum nss_status expected,
 
 static void test_interface_policy_parser(void)
 {
-    const char *current = getenv("RUSTD_NSS_RESOLVE_INTERFACE");
+    const char *current = getenv("RUSTD_NSS_DNS_INTERFACE");
     char *saved = current ? strdup(current) : NULL;
     if (current && !saved)
         fail("could not preserve interface policy");
@@ -64,17 +64,17 @@ static void test_interface_policy_parser(void)
         fail("loopback interface is unavailable");
     char numeric[32];
     if (snprintf(numeric, sizeof numeric, "%u", loopback) < 0 ||
-        setenv("RUSTD_NSS_RESOLVE_INTERFACE", numeric, 1) != 0 ||
+        setenv("RUSTD_NSS_DNS_INTERFACE", numeric, 1) != 0 ||
         sr_nss_query_ifindex() != (int)loopback)
         fail("numeric interface policy was not resolved");
-    if (setenv("RUSTD_NSS_RESOLVE_INTERFACE", "2147483647", 1) != 0 ||
+    if (setenv("RUSTD_NSS_DNS_INTERFACE", "2147483647", 1) != 0 ||
         sr_nss_query_ifindex() != 0)
         fail("nonexistent numeric interface policy was accepted");
 
     if (saved) {
-        if (setenv("RUSTD_NSS_RESOLVE_INTERFACE", saved, 1) != 0)
+        if (setenv("RUSTD_NSS_DNS_INTERFACE", saved, 1) != 0)
             fail("could not restore interface policy");
-    } else if (unsetenv("RUSTD_NSS_RESOLVE_INTERFACE") != 0) {
+    } else if (unsetenv("RUSTD_NSS_DNS_INTERFACE") != 0) {
         fail("could not clear interface policy");
     }
     free(saved);
@@ -100,7 +100,7 @@ static void test_gaih(void)
     int host_error = 0;
     int32_t ttl = -1;
     errno = E2BIG;
-    enum nss_status status = _nss_resolve_gethostbyname4_r(
+    enum nss_status status = _nss_rustd_dns_gethostbyname4_r(
         "example.test", &tuples, buffer, sizeof buffer, &error, &host_error, &ttl);
     require_status(status, NSS_STATUS_SUCCESS, "gethostbyname4", error, host_error);
     if (!tuples || ttl != 0 || error != 0 || host_error != NETDB_SUCCESS)
@@ -152,7 +152,7 @@ static void test_hostent_family(int family, const char *expected)
     struct hostent result;
     int error = 0;
     int host_error = 0;
-    enum nss_status status = _nss_resolve_gethostbyname2_r(
+    enum nss_status status = _nss_rustd_dns_gethostbyname2_r(
         "example.test", family, &result, buffer, sizeof buffer, &error, &host_error);
     require_status(status, NSS_STATUS_SUCCESS, "gethostbyname2", error, host_error);
     if (!result.h_name || strcmp(result.h_name, "example.test") != 0 ||
@@ -169,19 +169,19 @@ static void test_canonical_name(void)
     struct hostent result;
     int error = 0;
     int host_error = 0;
-    enum nss_status status = _nss_resolve_gethostbyname2_r(
+    enum nss_status status = _nss_rustd_dns_gethostbyname2_r(
         "alias.test", AF_INET, &result, buffer, sizeof buffer, &error, &host_error);
     require_status(status, NSS_STATUS_SUCCESS, "canonical-name lookup", error, host_error);
     if (!result.h_name || strcmp(result.h_name, "example.test") != 0)
         fail("canonical name from Varlink was not preserved");
 
-    status = _nss_resolve_gethostbyname2_r(
+    status = _nss_rustd_dns_gethostbyname2_r(
         "canonical-omitted.test", AF_INET, &result, buffer, sizeof buffer, &error, &host_error);
     require_status(status, NSS_STATUS_SUCCESS, "optional canonical-name lookup", error, host_error);
     if (!result.h_name || strcmp(result.h_name, "canonical-omitted.test") != 0)
         fail("query name was not used when the Varlink canonical name was omitted");
 
-    status = _nss_resolve_gethostbyname2_r(
+    status = _nss_rustd_dns_gethostbyname2_r(
         "canonical-extension.test", AF_INET, &result, buffer, sizeof buffer, &error, &host_error);
     require_status(status, NSS_STATUS_SUCCESS, "canonical extension lookup", error, host_error);
     if (!result.h_name || strcmp(result.h_name, "canonical-extension.test") != 0)
@@ -196,7 +196,7 @@ static void test_legacy_ipv6_preference(void)
     int host_error = 0;
     unsigned long saved_options = _res.options;
     _res.options |= 0x00002000;
-    enum nss_status status = _nss_resolve_gethostbyname_r(
+    enum nss_status status = _nss_rustd_dns_gethostbyname_r(
         "example.test", &result, buffer, sizeof buffer, &error, &host_error);
     _res.options = saved_options;
     require_status(status, NSS_STATUS_SUCCESS, "legacy IPv6 preference", error, host_error);
@@ -216,7 +216,7 @@ static void test_reverse(int family, const char *address)
     int error = 0;
     int host_error = 0;
     int32_t ttl = -1;
-    enum nss_status status = _nss_resolve_gethostbyaddr2_r(
+    enum nss_status status = _nss_rustd_dns_gethostbyaddr2_r(
         binary, (socklen_t)length, family, &result, buffer, sizeof buffer,
         &error, &host_error, &ttl);
     require_status(status, NSS_STATUS_SUCCESS, "gethostbyaddr2", error, host_error);
@@ -238,7 +238,7 @@ static void test_not_found(void)
     int error = 0;
     int host_error = 0;
     errno = E2BIG;
-    enum nss_status status = _nss_resolve_gethostbyname2_r(
+    enum nss_status status = _nss_rustd_dns_gethostbyname2_r(
         "missing.test", AF_INET, &result, buffer, sizeof buffer, &error, &host_error);
     require_status(status, NSS_STATUS_NOTFOUND, "missing lookup", error, host_error);
     if (error != 0 || host_error != NO_DATA)
@@ -253,7 +253,7 @@ static void test_small_buffer(void)
     struct hostent result;
     int error = 0;
     int host_error = 0;
-    enum nss_status status = _nss_resolve_gethostbyname2_r(
+    enum nss_status status = _nss_rustd_dns_gethostbyname2_r(
         "example.test", AF_INET, &result, buffer, sizeof buffer, &error, &host_error);
     require_status(status, NSS_STATUS_TRYAGAIN, "small-buffer lookup", error, host_error);
     if (error != ERANGE || host_error != NETDB_INTERNAL)
@@ -268,7 +268,7 @@ static void test_empty_and_reverse_buffer_contracts(void)
     int host_error = 0;
     enum nss_status status;
     if (!getenv("NSS_TEST_SKIP_VARLINK_ERRORS")) {
-        status = _nss_resolve_gethostbyname2_r(
+        status = _nss_rustd_dns_gethostbyname2_r(
             "empty.test", AF_INET, &result, buffer, sizeof buffer, &error, &host_error);
         require_status(status, NSS_STATUS_NOTFOUND, "empty address list", error, host_error);
         if (host_error != HOST_NOT_FOUND)
@@ -281,7 +281,7 @@ static void test_empty_and_reverse_buffer_contracts(void)
             fail("invalid reverse buffer test address");
         error = 0;
         host_error = 0;
-        status = _nss_resolve_gethostbyaddr2_r(
+        status = _nss_rustd_dns_gethostbyaddr2_r(
             &address, sizeof address, AF_INET, &result, buffer, sizeof buffer,
             &error, &host_error, NULL);
         require_status(status, NSS_STATUS_TRYAGAIN, "reverse small-buffer lookup", error, host_error);
@@ -297,7 +297,7 @@ static void test_error_status(const char *name, enum nss_status expected,
     struct hostent result;
     int error = 0;
     int host_error = 0;
-    enum nss_status status = _nss_resolve_gethostbyname2_r(
+    enum nss_status status = _nss_rustd_dns_gethostbyname2_r(
         name, AF_INET, &result, buffer, sizeof buffer, &error, &host_error);
     require_status(status, expected, name, error, host_error);
     if (error != expected_error || host_error != expected_host_error) {
@@ -318,7 +318,7 @@ static void test_reverse_error_contracts(void)
 
     int error = 0;
     int host_error = 0;
-    enum nss_status status = _nss_resolve_gethostbyaddr2_r(
+    enum nss_status status = _nss_rustd_dns_gethostbyaddr2_r(
         &address, sizeof address, AF_INET, &result, buffer, sizeof buffer,
         &error, &host_error, NULL);
     require_status(status, NSS_STATUS_NOTFOUND, "missing reverse lookup", error, host_error);
@@ -327,7 +327,7 @@ static void test_reverse_error_contracts(void)
 
     error = 0;
     host_error = 0;
-    status = _nss_resolve_gethostbyaddr2_r(
+    status = _nss_rustd_dns_gethostbyaddr2_r(
         &address, sizeof address, AF_UNSPEC, &result, buffer, sizeof buffer,
         &error, &host_error, NULL);
     require_status(status, NSS_STATUS_UNAVAIL, "invalid reverse family", error, host_error);
@@ -339,7 +339,7 @@ static void test_reverse_error_contracts(void)
             fail("invalid reverse schema address");
         error = 0;
         host_error = 0;
-        status = _nss_resolve_gethostbyaddr2_r(
+        status = _nss_rustd_dns_gethostbyaddr2_r(
             &address, sizeof address, AF_INET, &result, buffer, sizeof buffer,
             &error, &host_error, NULL);
         require_status(status, NSS_STATUS_UNAVAIL, "invalid reverse schema", error, host_error);
@@ -354,7 +354,7 @@ static void test_large_varlink_results(void)
     struct gaih_addrtuple *tuples = NULL;
     int error = 0;
     int host_error = 0;
-    enum nss_status status = _nss_resolve_gethostbyname4_r(
+    enum nss_status status = _nss_rustd_dns_gethostbyname4_r(
         "many.test", &tuples, buffer, sizeof buffer, &error, &host_error, NULL);
     require_status(status, NSS_STATUS_SUCCESS, "large forward result", error, host_error);
     size_t address_count = 0;
@@ -371,7 +371,7 @@ static void test_large_varlink_results(void)
     struct hostent result;
     error = 0;
     host_error = 0;
-    status = _nss_resolve_gethostbyaddr2_r(
+    status = _nss_rustd_dns_gethostbyaddr2_r(
         &address, sizeof address, AF_INET, &result, buffer, sizeof buffer,
         &error, &host_error, NULL);
     require_status(status, NSS_STATUS_SUCCESS, "large reverse result", error, host_error);
@@ -388,7 +388,7 @@ static void test_resolver_unavailable(void)
     struct hostent result;
     int error = 0;
     int host_error = 0;
-    enum nss_status status = _nss_resolve_gethostbyname2_r(
+    enum nss_status status = _nss_rustd_dns_gethostbyname2_r(
         "example.test", AF_INET, &result, buffer, sizeof buffer, &error, &host_error);
     require_status(status, NSS_STATUS_UNAVAIL, "unavailable resolver", error, host_error);
     if (host_error != NO_RECOVERY)

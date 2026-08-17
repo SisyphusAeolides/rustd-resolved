@@ -63,7 +63,7 @@ build_nss() {
     local destination="$1"
     make -C "$ROOT/nss" clean >/dev/null
     make -C "$ROOT/nss" all >/dev/null
-    install -Dm0755 "$ROOT/nss/libnss_resolve.so.2" "$destination"
+    install -Dm0755 "$ROOT/nss/libnss_rustd_dns.so.2" "$destination"
 }
 
 stage_release() {
@@ -76,7 +76,7 @@ stage_release() {
     install -Dm0755 "$target_dir/release/rustd-resolvectl" \
         "$stage/usr/bin/rustd-resolvectl"
     install -Dm0755 "$nss_module" \
-        "$stage/usr/lib/libnss_resolve.so.2"
+        "$stage/usr/lib/libnss_rustd_dns.so.2"
 
     for file in "$ROOT"/packaging/rustd/*; do
         install -Dm0644 "$file" \
@@ -86,19 +86,13 @@ stage_release() {
         "$stage/usr/lib/tmpfiles.d/rustd-resolved.conf"
     install -Dm0644 "$ROOT/packaging/sysusers/rustd-resolve.conf" \
         "$stage/usr/lib/sysusers.d/rustd-resolve.conf"
-    install -Dm0644 "$ROOT/packaging/dbus/org.freedesktop.resolve1.service" \
-        "$stage/usr/share/dbus-1/system-services/org.freedesktop.resolve1.service"
-    install -Dm0644 "$ROOT/packaging/dbus/org.freedesktop.resolve1.conf" \
-        "$stage/usr/share/dbus-1/system.d/org.freedesktop.resolve1.conf"
-    install -Dm0644 "$ROOT/packaging/polkit/org.freedesktop.resolve1.policy" \
-        "$stage/usr/share/polkit-1/actions/org.freedesktop.resolve1.policy"
 }
 
 build_once() {
     local label="$1"
     local target_dir="$WORK/target-$label"
     local stage="$WORK/stage-$label"
-    local nss_module="$WORK/libnss_resolve-$label.so.2"
+    local nss_module="$WORK/libnss_rustd_dns-$label.so.2"
 
     CARGO_TARGET_DIR="$target_dir" cargo build \
         --manifest-path "$ROOT/Cargo.toml" \
@@ -127,7 +121,7 @@ build_once b
 for relative in \
     usr/lib/rustd/rustd-resolved \
     usr/bin/rustd-resolvectl \
-    usr/lib/libnss_resolve.so.2; do
+    usr/lib/libnss_rustd_dns.so.2; do
     cmp "$WORK/stage-a/$relative" "$WORK/stage-b/$relative"
 done
 

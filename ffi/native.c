@@ -398,7 +398,7 @@ int resolved_socket_accepting(int fd) {
 }
 
 int resolved_notify(const char *state) {
-    const char *socket_path = getenv("NOTIFY_SOCKET");
+    const char *socket_path = getenv("RUSTD_NOTIFY_SOCKET");
     struct sockaddr_un address;
     size_t path_length;
     socklen_t address_length;
@@ -407,6 +407,10 @@ int resolved_notify(const char *state) {
 
     if (state == NULL) {
         return -EINVAL;
+    }
+    if (socket_path == NULL || socket_path[0] == '\0') {
+        /* Accept classic NOTIFY_SOCKET so Type=notify works under RustD or systemd. */
+        socket_path = getenv("NOTIFY_SOCKET");
     }
     if (socket_path == NULL || socket_path[0] == '\0') {
         return 0;

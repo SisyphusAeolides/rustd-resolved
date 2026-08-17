@@ -10,7 +10,7 @@
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-use std::os::unix::fs::{FileTypeExt, OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{fence, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
