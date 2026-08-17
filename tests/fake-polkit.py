@@ -37,23 +37,42 @@ class Authority(dbus.service.Object):
         if self.calls_file is not None:
             with self.calls_file.open("a", encoding="ascii") as stream:
                 stream.write(f"{action}\n")
-        if action == "io.rustd.resolve.dump-cache":
+        native_action = action.startswith("io.rustd.resolve.")
+        compat_action = action.startswith("org.freedesktop.resolve1.")
+
+        def valid_subject() -> bool:
             kind, values = subject
-            valid = str(kind) == "unix-process" and "pidfd" in values and "uid" in values
-            return valid, False, {}
-        if action == "io.rustd.resolve.reset-statistics":
-            if flags & 1:
-                kind, values = subject
-                valid = (
+            if native_action:
+                return (
                     str(kind) == "unix-process"
                     and "pidfd" in values
                     and "uid" in values
                 )
-                return valid, False, {}
+            if compat_action:
+                return str(kind) == "system-bus-name" and "name" in values
+            return False
+
+        if action in {
+            "io.rustd.resolve.dump-cache",
+            "org.freedesktop.resolve1.dump-cache",
+        }:
+            return valid_subject(), False, {}
+        if action in {
+            "io.rustd.resolve.reset-statistics",
+            "org.freedesktop.resolve1.reset-statistics",
+        }:
+            if flags & 1:
+                return valid_subject(), False, {}
             return False, True, {}
-        if action == "io.rustd.resolve.reset-server-features":
+        if action in {
+            "io.rustd.resolve.reset-server-features",
+            "org.freedesktop.resolve1.reset-server-features",
+        }:
             return False, False, {}
-        if action == "io.rustd.resolve.unregister-service":
+        if action in {
+            "io.rustd.resolve.unregister-service",
+            "org.freedesktop.resolve1.unregister-service",
+        }:
             return False, False, {}
         return True, False, {}
 
