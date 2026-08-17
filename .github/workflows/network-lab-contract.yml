@@ -27,11 +27,21 @@ jobs:
           set -euo pipefail
           python3 -m py_compile \
             scripts/network-lab-driver.py \
+            scripts/blackhole-lab-driver.py \
             tests/scenarios/lab_dns_server.py \
-            tests/scenarios/lab_dns_probe.py
+            tests/scenarios/lab_dns_probe.py \
+            tests/scenarios/malformed_live_campaign.py
           bash -n tests/scenarios/test_network_churn.sh
+          test -x scripts/network-lab-driver.py
+          test -x scripts/blackhole-lab-driver.py
           python3 scripts/network-lab-driver.py --help >/dev/null
+          python3 scripts/blackhole-lab-driver.py --help >/dev/null
+          python3 tests/scenarios/malformed_live_campaign.py --help >/dev/null
           grep -Fq 'RUSTD_RESOLVED_LAB_DRIVER:-$ROOT/scripts/network-lab-driver.py' \
             tests/scenarios/test_network_churn.sh
           grep -Fq 'options.iterations < 50' scripts/network-lab-driver.py
+          grep -Fq 'options.iterations < 20' scripts/blackhole-lab-driver.py
+          grep -Fq 'cases < 10_000' tests/scenarios/malformed_live_campaign.py
           grep -Fq '"resolver_sha": revision' scripts/network-lab-driver.py
+          grep -Fq '"resolver_sha": revision' scripts/blackhole-lab-driver.py
+          grep -Fq '"gate": "dns.malformed"' tests/scenarios/malformed_live_campaign.py
