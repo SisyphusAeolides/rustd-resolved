@@ -71,6 +71,22 @@ class SecureEvidenceTests(unittest.TestCase):
                 validator.read_secure_file(path)
 
 
+class LoadLivenessTests(unittest.TestCase):
+    class FakeProcess:
+        def __init__(self, status: int | None) -> None:
+            self.status = status
+
+        def poll(self) -> int | None:
+            return self.status
+
+    def test_running_load_is_accepted(self) -> None:
+        soak.check_load_running(self.FakeProcess(None), "during final sample")
+
+    def test_exited_load_is_rejected(self) -> None:
+        with self.assertRaises(RuntimeError):
+            soak.check_load_running(self.FakeProcess(17), "during final sample")
+
+
 class ResourceBoundTests(unittest.TestCase):
     def test_equal_bounds_are_accepted(self) -> None:
         soak.enforce_resource_bounds(

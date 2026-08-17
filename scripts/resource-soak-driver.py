@@ -63,6 +63,12 @@ def check_probe(command: str) -> None:
         raise RuntimeError(f"functional DNS probe failed with exit {result.returncode}")
 
 
+def check_load_running(process: subprocess.Popen[bytes], phase: str) -> None:
+    status = process.poll()
+    if status is not None:
+        raise RuntimeError(f"sustained load command exited {phase} with status {status}")
+
+
 def enforce_resource_bounds(
     rss_kib: int,
     fds: int,
@@ -175,10 +181,7 @@ def main() -> int:
             now = time.monotonic()
             if now >= deadline:
                 break
-            if load_process.poll() is not None:
-                raise RuntimeError(
-                    f"sustained load command exited early with status {load_process.returncode}"
-                )
+            check_load_running(load_process, "early")
             check_identity(pid)
             subprocess.run(
                 ["rustctl", "--quiet", "is-active", "rustd-resolved.service"], check=True
@@ -205,10 +208,7 @@ def main() -> int:
             )
             time.sleep(min(args.sample_seconds, max(0.0, deadline - time.monotonic())))
 
-        if load_process.poll() is not None:
-            raise RuntimeError(
-                f"sustained load command exited before final sample with status {load_process.returncode}"
-            )
+        check_load_running(load_process, "before final sample")
         check_identity(pid)
         subprocess.run(
             ["rustctl", "--quiet", "is-active", "rustd-resolved.service"], check=True
@@ -227,6 +227,7 @@ def main() -> int:
             max_fds=args.max_fds,
             max_threads=args.max_threads,
         )
+        check_load_running(load_process, "during final sample")
         completed_mono = time.monotonic()
         elapsed = int(completed_mono - started_mono)
         print(
