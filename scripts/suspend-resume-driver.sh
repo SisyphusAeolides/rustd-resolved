@@ -69,7 +69,7 @@ done
   echo "suspend/resume certification must run as root on the installed target" >&2
   exit 77
 }
-for command in git rtcwake rustctl awk readlink basename; do
+for command in git rtcwake rustctl awk readlink basename python3; do
   command -v "$command" >/dev/null || {
     echo "required command not found: $command" >&2
     exit 77
