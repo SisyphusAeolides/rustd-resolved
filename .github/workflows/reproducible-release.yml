@@ -14,7 +14,6 @@ on:
 
 permissions:
   contents: read
-  statuses: write
 
 jobs:
   reproduce:
@@ -59,46 +58,3 @@ jobs:
           path: target/reproducible-release
           if-no-files-found: error
           retention-days: 30
-
-      - name: Publish native reproducibility status
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
-          RESULT: ${{ job.status }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          state=failure
-          description="RustD resolver reproducibility failed"
-          if [[ "$RESULT" == success ]]; then
-            state=success
-            description="RustD resolver release is byte-identical"
-          fi
-          export state description
-          python3 - <<'PY'
-          import json
-          import os
-          import urllib.request
-
-          url = f"{os.environ['GITHUB_API_URL']}/repos/{os.environ['GITHUB_REPOSITORY']}/statuses/{os.environ['SOURCE_SHA']}"
-          payload = {
-              "state": os.environ["state"],
-              "context": "rustd-resolved/reproducibility",
-              "description": os.environ["description"],
-              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
-          }
-          request = urllib.request.Request(
-              url,
-              data=json.dumps(payload).encode("utf-8"),
-              headers={
-                  "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
-                  "Accept": "application/vnd.github+json",
-                  "X-GitHub-Api-Version": "2022-11-28",
-                  "Content-Type": "application/json",
-              },
-              method="POST",
-          )
-          with urllib.request.urlopen(request) as response:
-              response.read()
-          PY

@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  statuses: write
 
 concurrency:
   group: fuzz-smoke-${{ github.ref }}
@@ -21,20 +20,6 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - name: Publish pending status
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          payload=$(printf '{"state":"pending","context":"rustd-resolved/fuzz","description":"Fuzz smoke verification is running","target_url":"%s"}' "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")
-          curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header "Accept: application/vnd.github+json" \
-            --header "Authorization: Bearer $GH_TOKEN" \
-            --header "X-GitHub-Api-Version: 2022-11-28" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "$payload" >/dev/null
-
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -67,19 +52,3 @@ jobs:
           path: fuzz/artifacts
           if-no-files-found: ignore
           retention-days: 14
-
-      - name: Publish final status
-        if: ${{ always() }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          STATE: ${{ job.status == 'success' && 'success' || 'failure' }}
-        run: |
-          set -euo pipefail
-          payload=$(printf '{"state":"%s","context":"rustd-resolved/fuzz","description":"Fuzz smoke verification %s","target_url":"%s"}' "$STATE" "$STATE" "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")
-          curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header "Accept: application/vnd.github+json" \
-            --header "Authorization: Bearer $GH_TOKEN" \
-            --header "X-GitHub-Api-Version: 2022-11-28" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "$payload" >/dev/null

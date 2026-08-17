@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  statuses: write
 
 concurrency:
   group: restart-soak-${{ github.ref }}
@@ -21,20 +20,6 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Publish pending status
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          payload=$(printf '{"state":"pending","context":"rustd-resolved/restart-soak","description":"Resolver restart soak is running","target_url":"%s"}' "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")
-          curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header "Accept: application/vnd.github+json" \
-            --header "Authorization: Bearer $GH_TOKEN" \
-            --header "X-GitHub-Api-Version: 2022-11-28" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "$payload" >/dev/null
-
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -55,19 +40,3 @@ jobs:
 
       - name: Run restart soak
         run: python3 tests/restart-soak.py target/release/rustd-resolved target/release/rustd-resolvectl --cycles 10
-
-      - name: Publish final status
-        if: ${{ always() }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          STATE: ${{ job.status == 'success' && 'success' || 'failure' }}
-        run: |
-          set -euo pipefail
-          payload=$(printf '{"state":"%s","context":"rustd-resolved/restart-soak","description":"Resolver restart soak %s","target_url":"%s"}' "$STATE" "$STATE" "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")
-          curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header "Accept: application/vnd.github+json" \
-            --header "Authorization: Bearer $GH_TOKEN" \
-            --header "X-GitHub-Api-Version: 2022-11-28" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "$payload" >/dev/null

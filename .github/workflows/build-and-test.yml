@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  statuses: write
 
 jobs:
   verify:
@@ -27,23 +26,6 @@ jobs:
       RUSTUP_TOOLCHAIN: ${{ matrix.toolchain }}
 
     steps:
-      - name: Publish pending status
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          STATUS_CONTEXT: build-and-test/rust-${{ matrix.toolchain }}
-          STATUS_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          payload=$(printf '{"state":"pending","context":"%s","description":"Verification in progress","target_url":"%s"}' "$STATUS_CONTEXT" "$STATUS_URL")
-          curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header "Accept: application/vnd.github+json" \
-            --header "Authorization: Bearer $GH_TOKEN" \
-            --header "X-GitHub-Api-Version: 2022-11-28" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "$payload" >/dev/null
-
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -221,26 +203,6 @@ jobs:
           set -euo pipefail
           bash tests/dbus-introspection.sh target/release/rustd-resolved target/release/rustd-resolvectl
 
-      - name: Publish final status
-        if: ${{ always() }}
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          STATUS_CONTEXT: build-and-test/rust-${{ matrix.toolchain }}
-          STATUS_STATE: ${{ job.status == 'success' && 'success' || 'failure' }}
-          STATUS_DESCRIPTION: ${{ job.status == 'success' && 'Verification passed' || 'Verification failed' }}
-          STATUS_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          payload=$(printf '{"state":"%s","context":"%s","description":"%s","target_url":"%s"}' "$STATUS_STATE" "$STATUS_CONTEXT" "$STATUS_DESCRIPTION" "$STATUS_URL")
-          curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header "Accept: application/vnd.github+json" \
-            --header "Authorization: Bearer $GH_TOKEN" \
-            --header "X-GitHub-Api-Version: 2022-11-28" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "$payload" >/dev/null
-
   formal:
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -249,23 +211,6 @@ jobs:
       cancel-in-progress: false
 
     steps:
-      - name: Publish pending formal status
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          STATUS_CONTEXT: build-and-test/formal
-          STATUS_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          payload=$(printf '{"state":"pending","context":"%s","description":"Formal verification in progress","target_url":"%s"}' "$STATUS_CONTEXT" "$STATUS_URL")
-          curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header "Accept: application/vnd.github+json" \
-            --header "Authorization: Bearer $GH_TOKEN" \
-            --header "X-GitHub-Api-Version: 2022-11-28" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "$payload" >/dev/null
-
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -307,23 +252,3 @@ jobs:
           set -euo pipefail
           export PATH="$HOME/.idris2/bin:$PATH"
           make check-formal
-
-      - name: Publish final formal status
-        if: ${{ always() }}
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          STATUS_CONTEXT: build-and-test/formal
-          STATUS_STATE: ${{ job.status == 'success' && 'success' || 'failure' }}
-          STATUS_DESCRIPTION: ${{ job.status == 'success' && 'Formal verification passed' || 'Formal verification failed' }}
-          STATUS_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          payload=$(printf '{"state":"%s","context":"%s","description":"%s","target_url":"%s"}' "$STATUS_STATE" "$STATUS_CONTEXT" "$STATUS_DESCRIPTION" "$STATUS_URL")
-          curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header "Accept: application/vnd.github+json" \
-            --header "Authorization: Bearer $GH_TOKEN" \
-            --header "X-GitHub-Api-Version: 2022-11-28" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "$payload" >/dev/null
