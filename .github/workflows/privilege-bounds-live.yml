@@ -1,0 +1,89 @@
+name: Live resolver privilege bounds
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: resolver-privilege-live-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  privilege-bounds:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install network and native dependencies
+        shell: bash
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          set -euo pipefail
+          timeout 8m sudo apt-get -o Acquire::Retries=3 update
+          timeout 8m sudo apt-get -o Acquire::Retries=3 install --yes --no-install-recommends \
+            gfortran iproute2 libssl-dev liburing-dev
+
+      - name: Provision resolver service account
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! getent passwd rustd-resolve >/dev/null; then
+            sudo useradd --system --no-create-home --shell /usr/sbin/nologin rustd-resolve
+          fi
+          getent passwd rustd-resolve
+
+      - name: Build resolver
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release --locked --bin rustd-resolved
+
+      - name: Verify dropped identity, capability bounds, ownership, and privileged DNS bind
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=/tmp/rustd-resolver-privilege-ci.jsonl
+          sudo env PATH="$PATH" python3 scripts/capability-ownership-driver.py \
+            --repository "$PWD" \
+            --binary target/release/rustd-resolved \
+            --evidence-out "$evidence"
+          sudo chown "$(id -u):$(id -g)" "$evidence"
+          chmod 0600 "$evidence"
+          python3 - "$evidence" "$GITHUB_SHA" <<'PY'
+          import json
+          import stat
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          expected_sha = sys.argv[2]
+          if stat.S_IMODE(path.stat().st_mode) != 0o600:
+              raise SystemExit("resolver privilege evidence mode must be 0600")
+          records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+          expected = {"resolver.capability_bounds", "resolver.ownership"}
+          if {record.get("gate") for record in records} != expected or len(records) != 2:
+              raise SystemExit("resolver privilege evidence gate set is incomplete")
+          for record in records:
+              if record.get("status") != "pass" or record.get("resolver_sha") != expected_sha:
+                  raise SystemExit(f"{record.get('gate')}: status/SHA mismatch")
+              if not str(record.get("detail", "")).strip():
+                  raise SystemExit(f"{record.get('gate')}: evidence detail is empty")
+          print("certification evidence OK: resolver.capability_bounds,resolver.ownership")
+          PY
+
+      - name: Upload resolver privilege evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: resolver-privilege-live-${{ github.sha }}
+          path: /tmp/rustd-resolver-privilege-ci.jsonl
+          if-no-files-found: warn
+          retention-days: 14
