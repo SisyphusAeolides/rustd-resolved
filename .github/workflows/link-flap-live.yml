@@ -29,6 +29,15 @@ jobs:
           sudo apt-get install --yes --no-install-recommends \
             gfortran iproute2 libssl-dev liburing-dev
 
+      - name: Provision resolver service account
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! getent passwd rustd-resolve >/dev/null; then
+            sudo useradd --system --no-create-home --shell /usr/sbin/nologin rustd-resolve
+          fi
+          getent passwd rustd-resolve
+
       - name: Build resolver
         shell: bash
         run: |
