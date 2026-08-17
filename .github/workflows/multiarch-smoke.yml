@@ -12,14 +12,11 @@ jobs:
         target:
           - x86_64-unknown-linux-gnu
           - aarch64-unknown-linux-gnu
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Install Rust target
         run: rustup target add ${{ matrix.target }}
-      - name: Install cross (non-native)
-        if: matrix.target != 'x86_64-unknown-linux-gnu'
-        run: cargo install cross --locked
       - name: Native build and NSS gates
         if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: |
@@ -27,6 +24,6 @@ jobs:
           sudo apt-get install -y gfortran libssl-dev liburing-dev pkg-config
           make check-packaging check-nss
           cargo test --locked --lib
-      - name: Cross build (no run)
-        if: matrix.target != 'x86_64-unknown-linux-gnu'
-        run: cross build --release --locked --target ${{ matrix.target }}
+      - name: AArch64 release build
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: bash scripts/aarch64-cross-build.sh
