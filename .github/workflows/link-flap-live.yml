@@ -1,0 +1,47 @@
+name: Live link flap recovery
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: link-flap-live-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  link-flap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install network and native dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            gfortran iproute2 libssl-dev liburing-dev
+
+      - name: Build resolver
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release --locked --bin rustd-resolved
+
+      - name: Run 50-cycle namespace link-flap campaign
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo env PATH="$PATH" \
+            bash tests/scenarios/test_network_churn.sh \
+              --binary target/release/rustd-resolved \
+              --iterations 50 \
+              --evidence-out /tmp/rustd-link-flap-ci.jsonl
+          sudo rm -f /tmp/rustd-link-flap-ci.jsonl
