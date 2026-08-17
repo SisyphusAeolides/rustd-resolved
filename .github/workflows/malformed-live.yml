@@ -38,15 +38,45 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          evidence=/tmp/rustd-malformed-live-ci.jsonl
           python3 tests/scenarios/malformed_live_campaign.py \
             target/release/rustd-resolved \
-            --cases 10000 2>&1 | tee /tmp/malformed-live.log
+            --cases 10000 \
+            --evidence-out "$evidence" \
+            2>&1 | tee /tmp/malformed-live.log
+          chmod 0600 "$evidence"
+          python3 - "$evidence" "$GITHUB_SHA" <<'PY'
+          import json
+          import stat
+          import sys
+          from pathlib import Path
 
-      - name: Upload malformed-campaign diagnostics
+          path = Path(sys.argv[1])
+          expected_sha = sys.argv[2]
+          if stat.S_IMODE(path.stat().st_mode) != 0o600:
+              raise SystemExit("malformed evidence mode must be 0600")
+          records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+          if len(records) != 1:
+              raise SystemExit(f"expected one malformed evidence record, got {len(records)}")
+          record = records[0]
+          if record.get("gate") != "dns.malformed" or record.get("status") != "pass":
+              raise SystemExit("malformed evidence gate/status is invalid")
+          if record.get("resolver_sha") != expected_sha:
+              raise SystemExit("malformed evidence resolver_sha does not match GITHUB_SHA")
+          if int(record.get("cases", 0)) < 10000:
+              raise SystemExit("malformed evidence records fewer than 10000 cases")
+          if not str(record.get("detail", "")).strip():
+              raise SystemExit("malformed evidence detail is empty")
+          print("certification evidence OK: dns.malformed")
+          PY
+
+      - name: Upload malformed-campaign evidence and diagnostics
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: malformed-live-${{ github.sha }}
-          path: /tmp/malformed-live.log
-          if-no-files-found: error
+          path: |
+            /tmp/malformed-live.log
+            /tmp/rustd-malformed-live-ci.jsonl
+          if-no-files-found: warn
           retention-days: 14
