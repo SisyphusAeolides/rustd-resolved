@@ -20,7 +20,7 @@ fn native_resolver_targets_use_rustd_names() {
 }
 
 #[test]
-fn install_surface_is_rustd_native_only() {
+fn install_surface_keeps_native_ownership_with_resolve1_shim() {
     let makefile = include_str!("../Makefile");
 
     for required in [
@@ -32,11 +32,14 @@ fn install_surface_is_rustd_native_only() {
         "packaging/rustd/rustd-resolved-varlink.socket",
         "packaging/rustd/rustd-resolved-monitor.socket",
         "packaging/sysusers/rustd-resolve.conf",
+        "packaging/dbus/org.freedesktop.resolve1.service",
+        "packaging/dbus/org.freedesktop.resolve1.conf",
+        "packaging/polkit/org.freedesktop.resolve1.policy",
         "certify: release boot-smoke",
     ] {
         assert!(
             makefile.contains(required),
-            "native installation contract is missing {required}"
+            "installation contract is missing {required}"
         );
     }
 
@@ -52,12 +55,11 @@ fn install_surface_is_rustd_native_only() {
         "$(BINDIR)/systemd-resolve",
         "systemd-resolved.service",
         "/run/systemd/resolve",
-        "org.freedesktop.resolve1",
         "libnss_resolve",
     ] {
         assert!(
             !install_recipe.contains(forbidden),
-            "legacy compatibility install surface remains: {forbidden}"
+            "legacy executable/runtime install surface remains: {forbidden}"
         );
     }
 }

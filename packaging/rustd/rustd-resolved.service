@@ -8,7 +8,7 @@ Wants=nss-lookup.target
 
 [Service]
 Type=notify
-ExecStart=/usr/lib/rustd/rustd-resolved
+ExecStart=/usr/lib/rustd/rustd-resolved --dbus
 Restart=on-failure
 RestartSec=1s
 LimitNOFILE=524288
