@@ -40,7 +40,9 @@ jobs:
           replacements = [
               (
                   "use crate::config::{Config, SupportMode};",
-                  "use crate::config::{Config, DnsServerSpec, DnsStubListenerExtra, DnsStubListenerMode, SupportMode};",
+                  """use crate::config::{
+              Config, DnsServerSpec, DnsStubListenerExtra, DnsStubListenerMode, SupportMode,
+          };""",
                   1,
               ),
               ("use std::path::Path;", "use std::path::{Path, PathBuf};", 1),
