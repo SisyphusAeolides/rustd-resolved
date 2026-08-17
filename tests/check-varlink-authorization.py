@@ -44,7 +44,9 @@ def main() -> int:
     parser.add_argument("resolve_socket", type=Path)
     parser.add_argument("--delegate")
     options = parser.parse_args()
-    monitor_socket = options.resolve_socket.with_name("io.rustd.Resolve.Monitor")
+    monitor_socket = options.resolve_socket.with_name(
+        f"{options.resolve_socket.name}.Monitor"
+    )
 
     if options.delegate:
         configuration = call(
