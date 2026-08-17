@@ -1,0 +1,130 @@
+name: Validate resolver reload overrides
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/fix-reload-overrides.yml
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Install live-contract dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            dbus gfortran libssl-dev liburing-dev openssl \
+            python3 python3-dbus python3-gi python3-yaml
+
+      - name: Preserve launch overrides across reload
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          daemon = Path("src/daemon.rs")
+          source = daemon.read_text()
+          replacements = [
+              (
+                  "use crate::config::{Config, SupportMode};",
+                  "use crate::config::{Config, DnsServerSpec, DnsStubListenerExtra, DnsStubListenerMode, SupportMode};",
+                  1,
+              ),
+              ("use std::path::Path;", "use std::path::{Path, PathBuf};", 1),
+          ]
+          for old, new, expected in replacements:
+              if source.count(old) != expected:
+                  raise SystemExit(f"daemon: expected {expected} occurrence(s) of {old!r}")
+              source = source.replace(old, new, expected)
+
+          static_anchor = """static LOCAL_STOP: AtomicBool = AtomicBool::new(false);\nstatic LOCAL_RELOAD: AtomicBool = AtomicBool::new(false);\n"""
+          static_replacement = static_anchor + """\n#[derive(Clone, Debug, Default)]\npub struct ReloadOverrides {\n    pub upstreams: Option<Vec<SocketAddr>>,\n    pub upstream_specs: Option<Vec<DnsServerSpec>>,\n    pub fallback_upstreams: Option<Vec<SocketAddr>>,\n    pub fallback_upstream_specs: Option<Vec<DnsServerSpec>>,\n    pub listeners: Option<Vec<SocketAddr>>,\n    pub proxy_listeners: Option<Vec<SocketAddr>>,\n    pub dns_stub_listener: Option<DnsStubListenerMode>,\n    pub dns_stub_listener_extra: Option<Vec<DnsStubListenerExtra>>,\n    pub varlink_path: Option<PathBuf>,\n    pub runtime_directory: Option<PathBuf>,\n    pub workers: Option<usize>,\n}\n\nimpl ReloadOverrides {\n    fn apply(&self, config: &mut Config) -> Result<(), crate::config::ConfigError> {\n        if let Some(value) = &self.upstreams {\n            config.upstreams.clone_from(value);\n        }\n        if let Some(value) = &self.upstream_specs {\n            config.upstream_specs.clone_from(value);\n        }\n        if let Some(value) = &self.fallback_upstreams {\n            config.fallback_upstreams.clone_from(value);\n        }\n        if let Some(value) = &self.fallback_upstream_specs {\n            config.fallback_upstream_specs.clone_from(value);\n        }\n        if let Some(value) = &self.listeners {\n            config.listeners.clone_from(value);\n        }\n        if let Some(value) = &self.proxy_listeners {\n            config.proxy_listeners.clone_from(value);\n        }\n        if let Some(value) = self.dns_stub_listener {\n            config.dns_stub_listener = value;\n        }\n        if let Some(value) = &self.dns_stub_listener_extra {\n            config.dns_stub_listener_extra.clone_from(value);\n        }\n        if let Some(value) = &self.varlink_path {\n            config.varlink_path.clone_from(value);\n        }\n        if let Some(value) = &self.runtime_directory {\n            config.runtime_directory.clone_from(value);\n        }\n        if let Some(value) = self.workers {\n            config.workers = value;\n        }\n        config.validate()\n    }\n}\n"""
+          if source.count(static_anchor) != 1:
+              raise SystemExit("daemon: reload static anchor drifted")
+          source = source.replace(static_anchor, static_replacement, 1)
+
+          old_stub = """pub fn run_stub(resolver: &Arc<Resolver>) -> io::Result<()> {\n    run_stub_with_config(resolver, None)\n}\n\npub fn run_stub_with_config(\n    resolver: &Arc<Resolver>,\n    config_path: Option<&Path>,\n) -> io::Result<()> {\n"""
+          new_stub = """pub fn run_stub(resolver: &Arc<Resolver>) -> io::Result<()> {\n    run_stub_with_config(resolver, None, None)\n}\n\npub fn run_stub_with_config(\n    resolver: &Arc<Resolver>,\n    config_path: Option<&Path>,\n    reload_overrides: Option<&ReloadOverrides>,\n) -> io::Result<()> {\n"""
+          if source.count(old_stub) != 1:
+              raise SystemExit("daemon: run_stub signature drifted")
+          source = source.replace(old_stub, new_stub, 1)
+
+          old_reload = """                let config = match Config::load(path) {\n                    Ok(config) => config,\n                    Err(error) => {\n                        eprintln!(\"rustd-resolved: failed to reload configuration: {error}\");\n                        let mut config = Config::default();\n                        config.dns_delegates = crate::dns_delegate::load_system();\n                        config\n                    }\n                };\n                let previous = resolver.config();\n"""
+          new_reload = """                let mut config = match Config::load(path) {\n                    Ok(config) => config,\n                    Err(error) => {\n                        eprintln!(\"rustd-resolved: failed to reload configuration: {error}\");\n                        let mut config = Config::default();\n                        config.dns_delegates = crate::dns_delegate::load_system();\n                        config\n                    }\n                };\n                if let Some(overrides) = reload_overrides {\n                    overrides.apply(&mut config)?;\n                }\n                let previous = resolver.config();\n"""
+          if source.count(old_reload) != 1:
+              raise SystemExit("daemon: reload configuration block drifted")
+          source = source.replace(old_reload, new_reload, 1)
+          daemon.write_text(source)
+
+          main = Path("src/main.rs")
+          source = main.read_text()
+          old_import = "use rustd_resolved::daemon::{install_signal_handlers, request_stop, run_stub_with_config};"
+          new_import = "use rustd_resolved::daemon::{install_signal_handlers, request_stop, run_stub_with_config, ReloadOverrides};"
+          if source.count(old_import) != 1:
+              raise SystemExit("main: daemon import drifted")
+          source = source.replace(old_import, new_import, 1)
+
+          old_execute = """    let config = configured_resolver(&options)?;\n\n    if options.check_config {\n        print_configuration(&config, options.no_varlink);\n        return Ok(());\n    }\n    run_resolver(&config, &options)\n}\n\nfn configured_resolver(options: &Options) -> Result<Config, Box<dyn Error>> {\n"""
+          new_execute = """    let (config, reload_overrides) = configured_resolver(&options)?;\n\n    if options.check_config {\n        print_configuration(&config, options.no_varlink);\n        return Ok(());\n    }\n    run_resolver(&config, &options, &reload_overrides)\n}\n\nfn configured_resolver(options: &Options) -> Result<(Config, ReloadOverrides), Box<dyn Error>> {\n"""
+          if source.count(old_execute) != 1:
+              raise SystemExit("main: configured_resolver call/signature drifted")
+          source = source.replace(old_execute, new_execute, 1)
+
+          old_return = """    config.validate()?;\n    Ok(config)\n}\n\nfn apply_environment(config: &mut Config) -> Result<(), Box<dyn Error>> {\n"""
+          new_return = """    config.validate()?;\n    let reload_overrides = reload_overrides(options, &config);\n    Ok((config, reload_overrides))\n}\n\nfn reload_overrides(options: &Options, config: &Config) -> ReloadOverrides {\n    let stub_environment = env::var(\"RUSTD_RESOLVED_STUB_ADDR\")\n        .ok()\n        .map_or(false, |value| !value.trim().is_empty());\n    let proxy_environment = env::var(\"RUSTD_RESOLVED_STUB_ADDR_ALT\").is_ok();\n    let runtime_environment = env::var(\"RUSTD_RESOLVED_RUN_DIR\")\n        .ok()\n        .map_or(false, |value| !value.trim().is_empty());\n    let varlink_environment = env::var(\"RUSTD_RESOLVED_VARLINK\")\n        .ok()\n        .map_or(false, |value| !value.trim().is_empty());\n    let workers_environment = env::var(\"RUSTD_RESOLVED_WORKERS\")\n        .ok()\n        .map_or(false, |value| !value.trim().is_empty());\n    let upstream_override = !options.upstreams.is_empty();\n    let listeners_override =\n        stub_environment || !options.listeners.is_empty() || options.port.is_some();\n    let proxy_override =\n        proxy_environment || !options.proxy_listeners.is_empty() || options.port.is_some();\n    let runtime_override = runtime_environment || options.runtime_directory.is_some();\n    let varlink_override = varlink_environment\n        || (runtime_environment && env::var_os(\"RUSTD_RESOLVED_VARLINK\").is_none())\n        || options.varlink.is_some();\n    let workers_override = workers_environment || options.workers.is_some();\n\n    ReloadOverrides {\n        upstreams: upstream_override.then(|| config.upstreams.clone()),\n        upstream_specs: upstream_override.then(|| config.upstream_specs.clone()),\n        fallback_upstreams: upstream_override.then(|| config.fallback_upstreams.clone()),\n        fallback_upstream_specs: upstream_override\n            .then(|| config.fallback_upstream_specs.clone()),\n        listeners: listeners_override.then(|| config.listeners.clone()),\n        proxy_listeners: proxy_override.then(|| config.proxy_listeners.clone()),\n        dns_stub_listener: options.no_stub.then_some(config.dns_stub_listener),\n        dns_stub_listener_extra: options\n            .no_stub\n            .then(|| config.dns_stub_listener_extra.clone()),\n        varlink_path: varlink_override.then(|| config.varlink_path.clone()),\n        runtime_directory: runtime_override.then(|| config.runtime_directory.clone()),\n        workers: workers_override.then_some(config.workers),\n    }\n}\n\nfn apply_environment(config: &mut Config) -> Result<(), Box<dyn Error>> {\n"""
+          if source.count(old_return) != 1:
+              raise SystemExit("main: configured_resolver return drifted")
+          source = source.replace(old_return, new_return, 1)
+
+          old_run = """fn run_resolver(config: &Config, options: &Options) -> Result<(), Box<dyn Error>> {\n"""
+          new_run = """fn run_resolver(\n    config: &Config,\n    options: &Options,\n    reload_overrides: &ReloadOverrides,\n) -> Result<(), Box<dyn Error>> {\n"""
+          if source.count(old_run) != 1:
+              raise SystemExit("main: run_resolver signature drifted")
+          source = source.replace(old_run, new_run, 1)
+
+          old_call = """    let result = run_stub_with_config(&resolver, Some(&options.config));\n"""
+          new_call = """    let result = run_stub_with_config(\n        &resolver,\n        Some(&options.config),\n        Some(reload_overrides),\n    );\n"""
+          if source.count(old_call) != 1:
+              raise SystemExit("main: run_stub_with_config call drifted")
+          source = source.replace(old_call, new_call, 1)
+          main.write_text(source)
+
+          test = Path("tests/dbus-introspection.sh")
+          source = test.read_text()
+          end_anchor = """! grep -F 'route.test' \"$WORK/link-domains-reverted.txt\" >/dev/null\nENDSCRIPT\n"""
+          end_replacement = """! grep -F 'route.test' \"$WORK/link-domains-reverted.txt\" >/dev/null\n\n\"$RESOLVECTL\" --socket \"$WORK/runtime/io.systemd.Resolve\" \\\n    query -t A example.test >\"$WORK/reloaded-query.txt\"\ngrep -F 'example.test IN A 192.0.2.123' \"$WORK/reloaded-query.txt\" >/dev/null\nif grep -F 'failed to reload stub listeners:' \"$WORK/daemon.log\" >/dev/null; then\n    cat \"$WORK/daemon.log\" >&2\n    exit 1\nfi\nif grep -F 'failed to publish reloaded configuration:' \"$WORK/daemon.log\" >/dev/null; then\n    cat \"$WORK/daemon.log\" >&2\n    exit 1\nfi\nENDSCRIPT\n"""
+          if source.count(end_anchor) != 1:
+              raise SystemExit("dbus test: end anchor drifted")
+          test.write_text(source.replace(end_anchor, end_replacement, 1))
+          PY
+
+          cargo fmt --all -- --check
+          cargo test --locked
+          cargo build --release --locked
+          bash tests/dbus-introspection.sh target/release/rustd-resolved target/release/rustd-resolvectl
+
+          git rm -- .github/workflows/fix-reload-overrides.yml
+          expected=$'.github/workflows/fix-reload-overrides.yml\nsrc/daemon.rs\nsrc/main.rs\ntests/dbus-introspection.sh'
+          changed="$(git diff HEAD --name-only | sort)"
+          if [[ "$changed" != "$expected" ]]; then
+            printf 'Unexpected source changes:\n%s\n' "$changed" >&2
+            exit 1
+          fi
+          git config user.name 'Kenny Glowner'
+          git config user.email 'SisyphusAeolides@pm.me'
+          git add -- src/daemon.rs src/main.rs tests/dbus-introspection.sh
+          git commit -m 'Preserve resolver launch overrides on reload'
+          git push origin HEAD:main
