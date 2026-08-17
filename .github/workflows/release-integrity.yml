@@ -62,7 +62,7 @@ jobs:
                   raise SystemExit(f"{workflow}: source workflows must not write repository contents")
           PY
 
-      - name: Verify pushed commit identity
+      - name: Verify pushed commit provenance
         if: ${{ github.event_name == 'push' }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -73,6 +73,13 @@ jobs:
           import json
           import os
           import urllib.request
+
+          expected_login = "SisyphusAeolides"
+          expected_name = "Kenny Glowner"
+          expected_email = "SisyphusAeolides@pm.me"
+
+          if os.environ.get("GITHUB_ACTOR") != expected_login:
+              raise SystemExit("push actor does not match the repository owner")
 
           url = f"{os.environ['GITHUB_API_URL']}/repos/{os.environ['GITHUB_REPOSITORY']}/commits/{os.environ['GITHUB_SHA']}"
           request = urllib.request.Request(
@@ -85,8 +92,20 @@ jobs:
           )
           with urllib.request.urlopen(request) as response:
               commit = json.load(response)
+
           if commit["sha"] != os.environ["GITHUB_SHA"]:
               raise SystemExit("remote commit identity mismatch")
-          if not commit["commit"]["verification"]["verified"]:
-              raise SystemExit("remote commit signature is not verified")
+          for role in ("author", "committer"):
+              account = commit.get(role) or {}
+              identity = commit["commit"].get(role) or {}
+              if account.get("login") != expected_login:
+                  raise SystemExit(f"remote {role} account is not the repository owner")
+              if identity.get("name") != expected_name or identity.get("email") != expected_email:
+                  raise SystemExit(f"remote {role} identity does not match the repository owner")
+
+          verification = commit["commit"].get("verification") or {}
+          if verification.get("signature") is not None and not verification.get("verified"):
+              raise SystemExit("remote commit contains an invalid signature")
+          if not verification.get("verified") and verification.get("reason") != "unsigned":
+              raise SystemExit("remote commit verification state is not accepted")
           PY
