@@ -32,6 +32,8 @@ Native service/socket definitions include:
 
 For application interoperability, the production service starts the resolver with `--dbus` and owns the bounded `org.freedesktop.resolve1` D-Bus compatibility ABI. Activation is routed through `/usr/bin/rustctl`, bus ownership is assigned to `rustd-resolve`, and no `SystemdService=` activation or `/run/systemd/resolve` runtime ownership is used. Direct development/test runs can disable this compatibility endpoint with `--no-dbus`.
 
+`rustd-resolvectl` keeps native Varlink as its normal query/control transport while exposing the tested link-management compatibility verbs (`dns`, `domain`, `default-route`, `llmnr`, `mdns`, `dnsovertls`, `dnssec`, `nta`, and `revert`) through the bounded D-Bus adapter when arguments request a link mutation. The resolvconf invocation mode is similarly isolated at the CLI boundary.
+
 ## Resolver foundation
 
 The implementation includes:
@@ -71,7 +73,9 @@ make check-formal
 bash scripts/build-reproducible-release.sh
 ```
 
-The production CI separately exercises Rust 1.74, current stable, native C/Fortran ABI, packaging, NSS, formatting, production and all-feature Clippy, the full test suite, repeated DNS regression tests, release builds, direct-root privilege drop, live native DNS/Varlink, live D-Bus interoperability, formal verification, restart-soak behavior, fuzz smoke tests, and reproducible release builds.
+The production CI separately exercises Rust 1.74, current stable, native C/Fortran ABI, packaging, NSS, formatting, production and all-feature Clippy, the full test suite, repeated DNS regression tests, release builds, direct-root privilege drop, live native DNS/Varlink, live D-Bus interoperability, formal verification, restart-soak behavior, fuzz smoke tests, reproducible release builds, and native plus AArch64 release compilation with TLS, io_uring, and Fortran enabled.
+
+Reload coverage is part of the live contract. A SIGHUP re-reads configuration files while preserving launch-time environment and CLI overrides for listeners, proxy listeners, upstreams, runtime/Varlink paths, workers, ports, and stub-disable mode. The live D-Bus regression suite re-queries the deterministic upstream after HUP and rejects listener-rebind or configuration-publication permission failures after the daemon has dropped privileges.
 
 ## Native development run
 
