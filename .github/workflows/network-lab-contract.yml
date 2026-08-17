@@ -1,0 +1,37 @@
+name: Network lab contract
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: network-lab-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate first-party network lab
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            scripts/network-lab-driver.py \
+            tests/scenarios/lab_dns_server.py \
+            tests/scenarios/lab_dns_probe.py
+          bash -n tests/scenarios/test_network_churn.sh
+          python3 scripts/network-lab-driver.py --help >/dev/null
+          grep -Fq 'RUSTD_RESOLVED_LAB_DRIVER:-$ROOT/scripts/network-lab-driver.py' \
+            tests/scenarios/test_network_churn.sh
+          grep -Fq 'options.iterations < 50' scripts/network-lab-driver.py
+          grep -Fq '"resolver_sha": revision' scripts/network-lab-driver.py
