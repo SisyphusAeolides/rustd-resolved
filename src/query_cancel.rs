@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 thread_local! {
-    static CURRENT: RefCell<Option<QueryCancellation>> = RefCell::new(None);
+    static CURRENT: RefCell<Option<QueryCancellation>> = const { RefCell::new(None) };
 }
 
 #[derive(Clone, Debug, Default)]
