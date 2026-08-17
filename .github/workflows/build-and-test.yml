@@ -64,22 +64,35 @@ jobs:
           rustup show active-toolchain
 
       - name: Check native ABI
-        run: make check-native
+        shell: bash
+        run: |
+          set -euo pipefail
+          make check-native
 
       - name: Check RustD packaging
-        run: make check-packaging
+        shell: bash
+        run: |
+          set -euo pipefail
+          make check-packaging
 
       - name: Check NSS integration
         if: ${{ matrix.toolchain == 'stable' }}
-        run: make check-nss
+        shell: bash
+        run: |
+          set -euo pipefail
+          make check-nss
 
       - name: Canonicalize Rust source
-        run: cargo fmt --all
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all
 
       - name: Package canonical source snapshot
         if: ${{ matrix.toolchain == 'stable' }}
         shell: bash
         run: |
+          set -euo pipefail
           tar \
             --exclude=.git \
             --exclude=build \
@@ -99,12 +112,15 @@ jobs:
           retention-days: 14
 
       - name: Check formatting
-        run: git diff --exit-code -- src
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- src
 
       - name: Run production Clippy
         shell: bash
         run: |
-          set -o pipefail
+          set -euo pipefail
           cargo clippy --all-targets --locked -- \
             -D clippy::correctness \
             -D clippy::suspicious \
@@ -115,7 +131,7 @@ jobs:
       - name: Run all-feature correctness sweep
         shell: bash
         run: |
-          set -o pipefail
+          set -euo pipefail
           cargo clippy --all-targets --all-features --locked -- \
             -D clippy::correctness \
             -D clippy::suspicious \
@@ -133,7 +149,10 @@ jobs:
           retention-days: 1
 
       - name: Run tests
-        run: cargo test --all-targets --all-features --locked
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --all-targets --all-features --locked
 
       - name: Repeat transaction coalescing regression
         shell: bash
@@ -176,22 +195,31 @@ jobs:
           done
 
       - name: Build release binaries
-        run: cargo build --release --locked
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release --locked
 
       - name: Check direct root privilege drop
         if: ${{ matrix.toolchain == 'stable' }}
         shell: bash
-        run: bash tests/direct-root-privilege-drop.sh target/release/rustd-resolved
+        run: |
+          set -euo pipefail
+          bash tests/direct-root-privilege-drop.sh target/release/rustd-resolved
 
       - name: Check live DNS and Varlink path
         if: ${{ matrix.toolchain == 'stable' }}
         shell: bash
-        run: python3 tests/live-dns.py target/release/rustd-resolved target/release/rustd-resolvectl
+        run: |
+          set -euo pipefail
+          python3 tests/live-dns.py target/release/rustd-resolved target/release/rustd-resolvectl
 
       - name: Check live D-Bus contracts
         if: ${{ matrix.toolchain == 'stable' }}
         shell: bash
-        run: bash tests/dbus-introspection.sh target/release/rustd-resolved target/release/rustd-resolvectl
+        run: |
+          set -euo pipefail
+          bash tests/dbus-introspection.sh target/release/rustd-resolved target/release/rustd-resolvectl
 
       - name: Publish final status
         if: ${{ always() }}

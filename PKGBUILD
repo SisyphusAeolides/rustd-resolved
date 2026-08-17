@@ -5,8 +5,8 @@ pkgdesc='Native DNS resolver for RustD'
 arch=('x86_64')
 url='https://github.com/SisyphusAeolides/rustd-resolved'
 license=('LGPL-2.1-or-later')
-depends=('openssl')
-makedepends=('rust' 'gcc-fortran' 'git')
+depends=('openssl' 'liburing')
+makedepends=('rust' 'gcc-fortran' 'liburing' 'git')
 source=("${pkgname}::git+${url}.git")
 b2sums=('SKIP')
 

@@ -4,7 +4,7 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-BINARY=${1:-$ROOT/target/release/systemd-resolved}
+BINARY=${1:-$ROOT/target/release/rustd-resolved}
 
 test -x "$BINARY"
 python3 "$ROOT/tests/live-dnssd.py" "$BINARY"

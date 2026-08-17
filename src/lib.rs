@@ -6,9 +6,6 @@
     clippy::missing_panics_doc,
     clippy::module_name_repetitions,
     clippy::must_use_candidate,
-    // Transitional: DNS-SD / Varlink / TLS surfaces are wired incrementally.
-    dead_code,
-    unused_imports
 )]
 
 extern crate self as rustd_resolved;

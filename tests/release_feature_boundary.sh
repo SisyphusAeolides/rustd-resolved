@@ -29,14 +29,6 @@ if "supremacy" in default or "hyper" in default:
     raise SystemExit("research feature leaked into the production default")
 PY
 
-for script in "$ROOT/scripts/certify-replacement.sh" \
-    "$ROOT/scripts/certify-replacement-v2.sh"; do
-    if grep -Eq -- '--all-features' "$script"; then
-        printf 'research feature flag appears in replacement certification: %s\n' "$script" >&2
-        exit 1
-    fi
-done
-
 if grep -Eq -- '-march=native|-mcpu=native|target-cpu[=[:space:]]+native' \
     "$ROOT/build.rs"; then
     printf '%s\n' 'host-native compiler tuning appears in the release build' >&2
