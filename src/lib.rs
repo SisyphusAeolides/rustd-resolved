@@ -19,6 +19,7 @@ pub mod dbus;
 pub mod dbus_resolve1_abi;
 pub mod dns_delegate;
 pub mod dnssec;
+pub mod dnssec_rfc5011;
 pub mod edns;
 pub mod hook;
 pub mod hosts;
