@@ -18,12 +18,51 @@ fn object(out_dir: &Path, name: &str) -> PathBuf {
     out_dir.join(format!("{name}.o"))
 }
 
+fn target_tool(variable: &str, target: &str, fallback: &str) -> OsString {
+    let normalized = target.replace(['-', '.'], "_");
+    for key in [
+        format!("{variable}_{target}"),
+        format!("{variable}_{normalized}"),
+        format!("TARGET_{variable}"),
+        variable.to_owned(),
+    ] {
+        if let Some(value) = env::var_os(&key) {
+            if !value.is_empty() {
+                return value;
+            }
+        }
+    }
+
+    if target != env::var("HOST").unwrap_or_default() {
+        let prefix = match target {
+            "aarch64-unknown-linux-gnu" => Some("aarch64-linux-gnu-"),
+            "x86_64-unknown-linux-gnu" => Some("x86_64-linux-gnu-"),
+            "armv7-unknown-linux-gnueabihf" => Some("arm-linux-gnueabihf-"),
+            _ => None,
+        };
+        if let Some(prefix) = prefix {
+            let executable = match variable {
+                "CC" => "gcc",
+                "AR" => "ar",
+                "FC" => "gfortran",
+                _ => fallback,
+            };
+            return OsString::from(format!("{prefix}{executable}"));
+        }
+    }
+
+    OsString::from(fallback)
+}
+
 fn compile_c(cc: &OsString, source: &str, output: &Path) {
     command(
         cc,
         &[
             OsString::from("-c"),
-            OsString::from("-std=c17"),
+            // The FFI uses C11 language features. C11 keeps cross builds compatible
+            // with older distribution compilers while native packaging may enforce
+            // a newer dialect independently.
+            OsString::from("-std=c11"),
             OsString::from("-O2"),
             OsString::from("-fPIC"),
             OsString::from("-fstack-protector-strong"),
@@ -54,17 +93,18 @@ fn main() {
     println!("cargo:rerun-if-changed=ffi/iouring_dns.c");
     println!("cargo:rerun-if-changed=ffi/routing_score.f90");
 
-    let target = env::var("CARGO_CFG_TARGET_OS").expect("target OS is set by cargo");
+    let target_os = env::var("CARGO_CFG_TARGET_OS").expect("target OS is set by cargo");
     assert!(
-        target == "linux",
+        target_os == "linux",
         "rustd-resolved currently supports Linux only"
     );
+    let target = env::var("TARGET").expect("TARGET is set by cargo");
 
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR is set by cargo"));
     fs::create_dir_all(&out_dir).expect("create build output directory");
 
-    let cc = env::var_os("CC").unwrap_or_else(|| OsString::from("cc"));
-    let ar = env::var_os("AR").unwrap_or_else(|| OsString::from("ar"));
+    let cc = target_tool("CC", &target, "cc");
+    let ar = target_tool("AR", &target, "ar");
     let native_obj = object(&out_dir, "resolved_native");
     let interface_obj = object(&out_dir, "resolved_interface");
     let tls_obj = object(&out_dir, "resolved_tls");
@@ -108,7 +148,7 @@ fn main() {
             &cc,
             &[
                 OsString::from("-c"),
-                OsString::from("-std=c17"),
+                OsString::from("-std=c11"),
                 OsString::from("-O3"),
                 OsString::from("-fPIC"),
                 OsString::from("-fstack-protector-strong"),
@@ -129,7 +169,7 @@ fn main() {
 
     let fortran_enabled = env::var_os("CARGO_FEATURE_FORTRAN_ROUTING").is_some();
     if fortran_enabled {
-        let fc = env::var_os("FC").unwrap_or_else(|| OsString::from("gfortran"));
+        let fc = target_tool("FC", &target, "gfortran");
         let fortran_obj = object(&out_dir, "resolved_routing");
         let fortran_score_obj = object(&out_dir, "resolved_routing_score");
         command(
@@ -167,7 +207,7 @@ fn main() {
     }
 
     if env::var_os("CARGO_FEATURE_KALMAN").is_some() {
-        let fc = env::var_os("FC").unwrap_or_else(|| OsString::from("gfortran"));
+        let fc = target_tool("FC", &target, "gfortran");
         let kalman_obj = object(&out_dir, "resolved_kalman_upstream");
         command(
             &fc,
