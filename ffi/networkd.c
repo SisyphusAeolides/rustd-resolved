@@ -7,6 +7,7 @@
 #include <poll.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/inotify.h>
 #include <unistd.h>
@@ -20,12 +21,23 @@ static const char *const watch_paths[] = {
 
 int resolved_networkd_open(void) {
     const uint32_t mask = IN_MOVED_TO | IN_DELETE | IN_CLOSE_WRITE | IN_CREATE | IN_DELETE_SELF | IN_MOVE_SELF;
+    const char *override_path;
     int fd;
     size_t i;
 
     fd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
     if (fd < 0) {
         return -errno;
+    }
+
+    override_path = getenv("RUSTD_NETWORK_LINKS_DIR");
+    if (override_path != NULL && override_path[0] != '\0') {
+        if (inotify_add_watch(fd, override_path, mask) >= 0) {
+            return fd;
+        }
+        const int error = errno;
+        (void)close(fd);
+        return -error;
     }
 
     for (i = 0; i < sizeof(watch_paths) / sizeof(watch_paths[0]); i++) {

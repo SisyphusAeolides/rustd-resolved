@@ -7,8 +7,8 @@ import argparse
 import socket
 import struct
 
-NAME = "link-flap.test"
-ANSWER = "192.0.2.77"
+DEFAULT_NAME = "link-flap.test"
+DEFAULT_ANSWER = "192.0.2.77"
 
 
 def read_exact(stream: socket.socket, length: int) -> bytes:
@@ -21,10 +21,12 @@ def read_exact(stream: socket.socket, length: int) -> bytes:
     return bytes(data)
 
 
-def query(identifier: int) -> bytes:
+def query(name: str, identifier: int) -> bytes:
     packet = bytearray(struct.pack("!HHHHHH", identifier, 0x0100, 1, 0, 0, 0))
-    for label in NAME.split("."):
+    for label in name.split("."):
         encoded = label.encode("ascii")
+        if not encoded or len(encoded) > 63:
+            raise ValueError(f"invalid DNS label in {name}")
         packet.append(len(encoded))
         packet.extend(encoded)
     packet.append(0)
@@ -66,7 +68,7 @@ def skip_name(packet: bytes, offset: int) -> int:
         offset += length
 
 
-def validate(packet: bytes, identifier: int) -> None:
+def validate(packet: bytes, identifier: int, answer_address: str) -> None:
     if len(packet) < 12:
         raise AssertionError("short DNS response")
     response_id, flags, qdcount, ancount = struct.unpack_from("!HHHH", packet, 0)
@@ -84,29 +86,29 @@ def validate(packet: bytes, identifier: int) -> None:
         if offset + rdlength > len(packet):
             raise AssertionError("truncated DNS rdata")
         if (rtype, rclass, rdlength) == (1, 1, 4):
-            if socket.inet_ntoa(packet[offset : offset + 4]) != ANSWER:
+            if socket.inet_ntoa(packet[offset : offset + 4]) != answer_address:
                 raise AssertionError("unexpected DNS answer")
             return
         offset += rdlength
     raise AssertionError("A answer missing")
 
 
-def probe_udp(host: str, port: int, identifier: int) -> None:
+def probe_udp(host: str, port: int, name: str, answer_address: str, identifier: int) -> None:
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as client:
         client.settimeout(3)
-        client.sendto(query(identifier), (host, port))
+        client.sendto(query(name, identifier), (host, port))
         packet, _ = client.recvfrom(65535)
-    validate(packet, identifier)
+    validate(packet, identifier, answer_address)
 
 
-def probe_tcp(host: str, port: int, identifier: int) -> None:
-    payload = query(identifier)
+def probe_tcp(host: str, port: int, name: str, answer_address: str, identifier: int) -> None:
+    payload = query(name, identifier)
     with socket.create_connection((host, port), timeout=3) as client:
         client.settimeout(3)
         client.sendall(struct.pack("!H", len(payload)) + payload)
         length = struct.unpack("!H", read_exact(client, 2))[0]
         packet = read_exact(client, length)
-    validate(packet, identifier)
+    validate(packet, identifier, answer_address)
 
 
 def main() -> None:
@@ -115,11 +117,15 @@ def main() -> None:
     parser.add_argument("port", type=int)
     parser.add_argument("--protocol", choices=("udp", "tcp", "both"), default="both")
     parser.add_argument("--identifier", type=lambda value: int(value, 0), default=0x7100)
+    parser.add_argument("--name", default=DEFAULT_NAME)
+    parser.add_argument("--answer", default=DEFAULT_ANSWER)
     args = parser.parse_args()
+    name = args.name.lower().rstrip(".")
+    socket.inet_aton(args.answer)
     if args.protocol in ("udp", "both"):
-        probe_udp(args.host, args.port, args.identifier)
+        probe_udp(args.host, args.port, name, args.answer, args.identifier)
     if args.protocol in ("tcp", "both"):
-        probe_tcp(args.host, args.port, args.identifier + 1)
+        probe_tcp(args.host, args.port, name, args.answer, args.identifier + 1)
 
 
 if __name__ == "__main__":

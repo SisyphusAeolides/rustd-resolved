@@ -1,0 +1,99 @@
+name: Live VPN split DNS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vpn-split-dns-live-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  vpn-split-dns:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install network and native dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            gfortran iproute2 libssl-dev liburing-dev
+
+      - name: Provision resolver service account
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! getent passwd rustd-resolve >/dev/null; then
+            sudo useradd --system --no-create-home --shell /usr/sbin/nologin rustd-resolve
+          fi
+          getent passwd rustd-resolve
+
+      - name: Build resolver
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release --locked --bin rustd-resolved
+
+      - name: Run 20-change live VPN split-DNS campaign
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=/tmp/rustd-vpn-split-dns-ci.jsonl
+          set +e
+          sudo env PATH="$PATH" \
+            RUSTD_RESOLVED_LAB_DRIVER="$PWD/scripts/vpn-split-dns-driver.py" \
+            bash tests/scenarios/test_vpn_split_dns.sh \
+              --binary target/release/rustd-resolved \
+              --iterations 20 \
+              --evidence-out "$evidence" \
+            2>&1 | tee /tmp/vpn-split-dns-live.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -eq 0 ]]; then
+            sudo chown "$(id -u):$(id -g)" "$evidence"
+            chmod 0600 "$evidence"
+            python3 - "$evidence" "$GITHUB_SHA" <<'PY'
+          import json
+          import stat
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          expected_sha = sys.argv[2]
+          if stat.S_IMODE(path.stat().st_mode) != 0o600:
+              raise SystemExit("evidence mode must be 0600")
+          records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+          if len(records) != 1 or records[0].get("gate") != "dns.vpn_change":
+              raise SystemExit("unexpected VPN evidence gate set")
+          record = records[0]
+          if record.get("status") != "pass" or record.get("resolver_sha") != expected_sha:
+              raise SystemExit("VPN evidence status/SHA mismatch")
+          if int(record.get("iterations", 0)) < 20:
+              raise SystemExit("dns.vpn_change evidence records fewer than 20 changes")
+          if not str(record.get("detail", "")).strip():
+              raise SystemExit("dns.vpn_change evidence detail is empty")
+          print("certification evidence OK: dns.vpn_change")
+          PY
+          fi
+          exit "$status"
+
+      - name: Upload VPN split-DNS evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vpn-split-dns-live-${{ github.sha }}
+          path: |
+            /tmp/vpn-split-dns-live.log
+            /tmp/rustd-vpn-split-dns-ci.jsonl
+          if-no-files-found: warn
+          retention-days: 14
