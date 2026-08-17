@@ -5,7 +5,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 thread_local! {
-    static CURRENT: RefCell<Option<QueryCancellation>> = const { RefCell::new(None) };
+    // Rust 1.74's const thread-local expansion conflicts with the crate-level
+    // `forbid(unsafe_op_in_unsafe_fn)`. Preserve the MSRV-safe initializer.
+    #[allow(clippy::missing_const_for_thread_local)]
+    static CURRENT: RefCell<Option<QueryCancellation>> = RefCell::new(None);
 }
 
 #[derive(Clone, Debug, Default)]
