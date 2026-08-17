@@ -37,9 +37,9 @@ done
 grep -Fx 'After=rustd-sysusers.service network-pre.target' \
     packaging/rustd/rustd-resolved.service >/dev/null \
     || fail "resolver unit does not order startup after RustD sysusers"
-grep -Fx 'ExecStart=/usr/lib/rustd/rustd-resolved' \
+grep -Fx 'ExecStart=/usr/lib/rustd/rustd-resolved --dbus' \
     packaging/rustd/rustd-resolved.service >/dev/null \
-    || fail "resolver unit does not start the native RustD binary"
+    || fail "resolver unit does not start the native RustD binary with the resolve1 boundary enabled"
 grep -Fx 'LimitNOFILE=524288' packaging/rustd/rustd-resolved.service \
     >/dev/null || fail "resolver unit does not set the high-QPS descriptor budget"
 grep -F 'RUSTD_UNITDIR ?= $(PREFIX)/lib/rustd/system' Makefile >/dev/null \
