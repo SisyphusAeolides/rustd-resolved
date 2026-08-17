@@ -30,6 +30,8 @@ Native service/socket definitions include:
 - `packaging/rustd/rustd-resolved-monitor.socket`;
 - `packaging/sysusers/rustd-resolve.conf`.
 
+For application interoperability, the production service starts the resolver with `--dbus` and owns the bounded `org.freedesktop.resolve1` D-Bus compatibility ABI. Activation is routed through `/usr/bin/rustctl`, bus ownership is assigned to `rustd-resolve`, and no `SystemdService=` activation or `/run/systemd/resolve` runtime ownership is used. Direct development/test runs can disable this compatibility endpoint with `--no-dbus`.
+
 ## Resolver foundation
 
 The implementation includes:
@@ -89,7 +91,7 @@ cargo run --bin rustd-resolvectl -- \
 
 Compatibility adapters are allowed only at explicit external boundaries. They must not become the canonical core again. A compatibility surface must be regression-tested and must leave RustD-native package names, executable names, private protocol vocabulary, runtime paths, configuration roots, NSS defaults, service account, and diagnostics authoritative.
 
-This means legacy D-Bus or Varlink application clients can be supported without making another resolver implementation RustD's reference architecture.
+The `org.freedesktop.resolve1` endpoint is such a boundary: it exists for third-party clients that speak the established D-Bus ABI, while resolver execution, RustD Varlink, NSS, configuration, packaging, service ownership, and runtime state remain native RustD interfaces.
 
 ## Production-release boundary
 
