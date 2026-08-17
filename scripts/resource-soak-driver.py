@@ -7,10 +7,10 @@ import argparse
 import json
 import os
 from pathlib import Path
-import shlex
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 
 MIN_DURATION = 72 * 60 * 60
@@ -63,15 +63,52 @@ def check_probe(command: str) -> None:
         raise RuntimeError(f"functional DNS probe failed with exit {result.returncode}")
 
 
-def terminate(process: subprocess.Popen[bytes] | None) -> None:
-    if process is None or process.poll() is not None:
-        return
-    process.send_signal(signal.SIGTERM)
+def enforce_resource_bounds(
+    rss_kib: int,
+    fds: int,
+    threads: int,
+    *,
+    max_rss_kib: int,
+    max_fds: int,
+    max_threads: int,
+) -> None:
+    if rss_kib > max_rss_kib:
+        raise RuntimeError(f"resolver RSS {rss_kib} KiB exceeded bound {max_rss_kib} KiB")
+    if fds > max_fds:
+        raise RuntimeError(f"resolver FD count {fds} exceeded bound {max_fds}")
+    if threads > max_threads:
+        raise RuntimeError(f"resolver thread count {threads} exceeded bound {max_threads}")
+
+
+def write_evidence(path: Path, record: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+    )
+    temporary = Path(temporary_name)
     try:
-        process.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait(timeout=5)
+        os.fchmod(descriptor, 0o600)
+        payload = json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n"
+        with os.fdopen(descriptor, "w", encoding="utf-8", closefd=True) as handle:
+            descriptor = -1
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        directory_flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+        directory_flags |= getattr(os, "O_DIRECTORY", 0)
+        directory = os.open(path.parent, directory_flags)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def parse_args() -> argparse.Namespace:
@@ -123,6 +160,7 @@ def main() -> int:
     samples = 0
     started_wall = time.time()
     started_mono = time.monotonic()
+    completed_mono: float | None = None
     deadline = started_mono + args.duration_seconds
 
     try:
@@ -151,16 +189,14 @@ def main() -> int:
             peak_rss = max(peak_rss, rss_kib)
             peak_fds = max(peak_fds, fds)
             peak_threads = max(peak_threads, threads)
-            if rss_kib > args.max_rss_kib:
-                raise RuntimeError(
-                    f"resolver RSS {rss_kib} KiB exceeded bound {args.max_rss_kib} KiB"
-                )
-            if fds > args.max_fds:
-                raise RuntimeError(f"resolver FD count {fds} exceeded bound {args.max_fds}")
-            if threads > args.max_threads:
-                raise RuntimeError(
-                    f"resolver thread count {threads} exceeded bound {args.max_threads}"
-                )
+            enforce_resource_bounds(
+                rss_kib,
+                fds,
+                threads,
+                max_rss_kib=args.max_rss_kib,
+                max_fds=args.max_fds,
+                max_threads=args.max_threads,
+            )
             elapsed = int(now - started_mono)
             print(
                 f"soak sample={samples} elapsed={elapsed}s rss_kib={rss_kib} "
@@ -169,16 +205,35 @@ def main() -> int:
             )
             time.sleep(min(args.sample_seconds, max(0.0, deadline - time.monotonic())))
 
-        check_identity(pid)
-        check_probe(args.probe_command)
-        rss_kib, fds, threads = process_metrics(pid)
-        peak_rss = max(peak_rss, rss_kib)
-        peak_fds = max(peak_fds, fds)
-        peak_threads = max(peak_threads, threads)
         if load_process.poll() is not None:
             raise RuntimeError(
                 f"sustained load command exited before final sample with status {load_process.returncode}"
             )
+        check_identity(pid)
+        subprocess.run(
+            ["rustctl", "--quiet", "is-active", "rustd-resolved.service"], check=True
+        )
+        check_probe(args.probe_command)
+        rss_kib, fds, threads = process_metrics(pid)
+        samples += 1
+        peak_rss = max(peak_rss, rss_kib)
+        peak_fds = max(peak_fds, fds)
+        peak_threads = max(peak_threads, threads)
+        enforce_resource_bounds(
+            rss_kib,
+            fds,
+            threads,
+            max_rss_kib=args.max_rss_kib,
+            max_fds=args.max_fds,
+            max_threads=args.max_threads,
+        )
+        completed_mono = time.monotonic()
+        elapsed = int(completed_mono - started_mono)
+        print(
+            f"soak sample={samples} elapsed={elapsed}s rss_kib={rss_kib} "
+            f"fds={fds} threads={threads} final=true",
+            flush=True,
+        )
     finally:
         if load_process is not None and load_process.poll() is None:
             try:
@@ -191,14 +246,16 @@ def main() -> int:
                     pass
                 load_process.wait(timeout=5)
 
-    elapsed_seconds = int(time.monotonic() - started_mono)
-    if elapsed_seconds < MIN_DURATION:
+    if completed_mono is None:
+        raise RuntimeError("resource soak did not complete its final sample")
+    elapsed_seconds = int(completed_mono - started_mono)
+    if elapsed_seconds < args.duration_seconds:
         raise RuntimeError(
-            f"resource soak elapsed only {elapsed_seconds}s; release minimum is {MIN_DURATION}s"
+            f"resource soak elapsed only {elapsed_seconds}s; requested {args.duration_seconds}s"
         )
 
     evidence = args.evidence_out or repository / "target/certification/resolver-resource-soak.jsonl"
-    record = {
+    record: dict[str, object] = {
         "gate": "resolver.resource_soak",
         "status": "pass",
         "detail": (
@@ -211,12 +268,16 @@ def main() -> int:
         "started_ts": int(started_wall),
         "resolver_sha": revision,
         "duration_seconds": elapsed_seconds,
+        "peak_rss_kib": peak_rss,
+        "max_rss_kib": args.max_rss_kib,
+        "peak_fds": peak_fds,
+        "max_fds": args.max_fds,
+        "peak_threads": peak_threads,
+        "max_threads": args.max_threads,
+        "samples": samples,
         "source": "scripts/resource-soak-driver.py",
     }
-    evidence.parent.mkdir(parents=True, exist_ok=True)
-    descriptor = os.open(evidence, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-        handle.write(json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n")
+    write_evidence(evidence, record)
     print(
         f"resource soak certification passed: duration={elapsed_seconds}s evidence={evidence}",
         flush=True,

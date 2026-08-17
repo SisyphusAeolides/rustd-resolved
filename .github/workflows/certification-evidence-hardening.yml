@@ -1,0 +1,32 @@
+name: Certification evidence hardening
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: certification-evidence-hardening-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate certification evidence handling
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            scripts/resource-soak-driver.py \
+            scripts/validate-certification-evidence.py \
+            tests/test-certification-hardening.py
+          python3 tests/test-certification-hardening.py
