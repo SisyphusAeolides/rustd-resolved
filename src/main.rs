@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 use rustd_resolved::config::{parse_server, Config, DnsStubListenerMode};
-use rustd_resolved::daemon::{install_signal_handlers, request_stop, run_stub_with_config};
+use rustd_resolved::daemon::{install_signal_handlers, request_stop, run_stub_with_config, ReloadOverrides};
 use rustd_resolved::dbus::DbusServer;
 use rustd_resolved::resolver::Resolver;
 use rustd_resolved::varlink::VarlinkServer;
@@ -78,16 +78,16 @@ fn execute() -> Result<(), Box<dyn Error>> {
     let Some(options) = parse_options()? else {
         return Ok(());
     };
-    let config = configured_resolver(&options)?;
+    let (config, reload_overrides) = configured_resolver(&options)?;
 
     if options.check_config {
         print_configuration(&config, options.no_varlink);
         return Ok(());
     }
-    run_resolver(&config, &options)
+    run_resolver(&config, &options, &reload_overrides)
 }
 
-fn configured_resolver(options: &Options) -> Result<Config, Box<dyn Error>> {
+fn configured_resolver(options: &Options) -> Result<(Config, ReloadOverrides), Box<dyn Error>> {
     let mut config = Config::load(&options.config)?;
     apply_environment(&mut config)?;
 
@@ -119,7 +119,51 @@ fn configured_resolver(options: &Options) -> Result<Config, Box<dyn Error>> {
         config.dns_stub_listener_extra.clear();
     }
     config.validate()?;
-    Ok(config)
+    let reload_overrides = reload_overrides(options, &config);
+    Ok((config, reload_overrides))
+}
+
+fn reload_overrides(options: &Options, config: &Config) -> ReloadOverrides {
+    let stub_environment = env::var("RUSTD_RESOLVED_STUB_ADDR")
+        .ok()
+        .map_or(false, |value| !value.trim().is_empty());
+    let proxy_environment = env::var("RUSTD_RESOLVED_STUB_ADDR_ALT").is_ok();
+    let runtime_environment = env::var("RUSTD_RESOLVED_RUN_DIR")
+        .ok()
+        .map_or(false, |value| !value.trim().is_empty());
+    let varlink_environment = env::var("RUSTD_RESOLVED_VARLINK")
+        .ok()
+        .map_or(false, |value| !value.trim().is_empty());
+    let workers_environment = env::var("RUSTD_RESOLVED_WORKERS")
+        .ok()
+        .map_or(false, |value| !value.trim().is_empty());
+    let upstream_override = !options.upstreams.is_empty();
+    let listeners_override =
+        stub_environment || !options.listeners.is_empty() || options.port.is_some();
+    let proxy_override =
+        proxy_environment || !options.proxy_listeners.is_empty() || options.port.is_some();
+    let runtime_override = runtime_environment || options.runtime_directory.is_some();
+    let varlink_override = varlink_environment
+        || (runtime_environment && env::var_os("RUSTD_RESOLVED_VARLINK").is_none())
+        || options.varlink.is_some();
+    let workers_override = workers_environment || options.workers.is_some();
+
+    ReloadOverrides {
+        upstreams: upstream_override.then(|| config.upstreams.clone()),
+        upstream_specs: upstream_override.then(|| config.upstream_specs.clone()),
+        fallback_upstreams: upstream_override.then(|| config.fallback_upstreams.clone()),
+        fallback_upstream_specs: upstream_override
+            .then(|| config.fallback_upstream_specs.clone()),
+        listeners: listeners_override.then(|| config.listeners.clone()),
+        proxy_listeners: proxy_override.then(|| config.proxy_listeners.clone()),
+        dns_stub_listener: options.no_stub.then_some(config.dns_stub_listener),
+        dns_stub_listener_extra: options
+            .no_stub
+            .then(|| config.dns_stub_listener_extra.clone()),
+        varlink_path: varlink_override.then(|| config.varlink_path.clone()),
+        runtime_directory: runtime_override.then(|| config.runtime_directory.clone()),
+        workers: workers_override.then_some(config.workers),
+    }
 }
 
 fn apply_environment(config: &mut Config) -> Result<(), Box<dyn Error>> {
@@ -162,7 +206,11 @@ fn apply_environment(config: &mut Config) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn run_resolver(config: &Config, options: &Options) -> Result<(), Box<dyn Error>> {
+fn run_resolver(
+    config: &Config,
+    options: &Options,
+    reload_overrides: &ReloadOverrides,
+) -> Result<(), Box<dyn Error>> {
     let primary_stub_enabled = config.dns_stub_listener != DnsStubListenerMode::No
         && (!config.listeners.is_empty() || !config.proxy_listeners.is_empty());
     let stub_enabled = primary_stub_enabled || !config.dns_stub_listener_extra.is_empty();
@@ -187,7 +235,11 @@ fn run_resolver(config: &Config, options: &Options) -> Result<(), Box<dyn Error>
     let varlink_thread = spawn_varlink(&resolver, config, options.no_varlink)?;
     log_stub_listeners(config, primary_stub_enabled);
 
-    let result = run_stub_with_config(&resolver, Some(&options.config));
+    let result = run_stub_with_config(
+        &resolver,
+        Some(&options.config),
+        Some(reload_overrides),
+    );
     request_stop();
     if let Some(thread) = varlink_thread {
         let _ = thread.join();

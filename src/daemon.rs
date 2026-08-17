@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 use crate::bounded_executor::{peer_key_from_socket_addr, tcp_executor};
-use crate::config::{Config, SupportMode};
+use crate::config::{
+    Config, DnsServerSpec, DnsStubListenerExtra, DnsStubListenerMode, SupportMode,
+};
 use crate::native;
 use crate::resolver::{QueryMode, Resolver};
 use std::env;
 use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream, UdpSocket};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
 use std::sync::Arc;
@@ -17,6 +19,62 @@ const MAX_UDP_PACKET: usize = 65_535;
 const UDP_QUEUE_PER_WORKER: usize = 256;
 static LOCAL_STOP: AtomicBool = AtomicBool::new(false);
 static LOCAL_RELOAD: AtomicBool = AtomicBool::new(false);
+
+#[derive(Clone, Debug, Default)]
+pub struct ReloadOverrides {
+    pub upstreams: Option<Vec<SocketAddr>>,
+    pub upstream_specs: Option<Vec<DnsServerSpec>>,
+    pub fallback_upstreams: Option<Vec<SocketAddr>>,
+    pub fallback_upstream_specs: Option<Vec<DnsServerSpec>>,
+    pub listeners: Option<Vec<SocketAddr>>,
+    pub proxy_listeners: Option<Vec<SocketAddr>>,
+    pub dns_stub_listener: Option<DnsStubListenerMode>,
+    pub dns_stub_listener_extra: Option<Vec<DnsStubListenerExtra>>,
+    pub varlink_path: Option<PathBuf>,
+    pub runtime_directory: Option<PathBuf>,
+    pub workers: Option<usize>,
+}
+
+impl ReloadOverrides {
+    fn apply(&self, config: &mut Config) -> io::Result<()> {
+        if let Some(value) = &self.upstreams {
+            config.upstreams.clone_from(value);
+        }
+        if let Some(value) = &self.upstream_specs {
+            config.upstream_specs.clone_from(value);
+        }
+        if let Some(value) = &self.fallback_upstreams {
+            config.fallback_upstreams.clone_from(value);
+        }
+        if let Some(value) = &self.fallback_upstream_specs {
+            config.fallback_upstream_specs.clone_from(value);
+        }
+        if let Some(value) = &self.listeners {
+            config.listeners.clone_from(value);
+        }
+        if let Some(value) = &self.proxy_listeners {
+            config.proxy_listeners.clone_from(value);
+        }
+        if let Some(value) = self.dns_stub_listener {
+            config.dns_stub_listener = value;
+        }
+        if let Some(value) = &self.dns_stub_listener_extra {
+            config.dns_stub_listener_extra.clone_from(value);
+        }
+        if let Some(value) = &self.varlink_path {
+            config.varlink_path.clone_from(value);
+        }
+        if let Some(value) = &self.runtime_directory {
+            config.runtime_directory.clone_from(value);
+        }
+        if let Some(value) = self.workers {
+            config.workers = value;
+        }
+        config
+            .validate()
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error.to_string()))
+    }
+}
 
 #[derive(Debug)]
 struct UdpJob {
@@ -184,12 +242,13 @@ pub fn install_signal_handlers() -> io::Result<()> {
 }
 
 pub fn run_stub(resolver: &Arc<Resolver>) -> io::Result<()> {
-    run_stub_with_config(resolver, None)
+    run_stub_with_config(resolver, None, None)
 }
 
 pub fn run_stub_with_config(
     resolver: &Arc<Resolver>,
     config_path: Option<&Path>,
+    reload_overrides: Option<&ReloadOverrides>,
 ) -> io::Result<()> {
     let llmnr_runtime = crate::llmnr::LlmnrRuntime::start(Arc::clone(resolver))?;
     let mut mdns_responder = if resolver.global_multicast_dns_mode() == SupportMode::No {
@@ -219,7 +278,7 @@ pub fn run_stub_with_config(
         if take_reload() {
             let _ = native::notify_reloading("Reloading resolver configuration");
             if let Some(path) = config_path {
-                let config = match Config::load(path) {
+                let mut config = match Config::load(path) {
                     Ok(config) => config,
                     Err(error) => {
                         eprintln!("rustd-resolved: failed to reload configuration: {error}");
@@ -228,6 +287,9 @@ pub fn run_stub_with_config(
                         config
                     }
                 };
+                if let Some(overrides) = reload_overrides {
+                    overrides.apply(&mut config)?;
+                }
                 let previous = resolver.config();
                 let listeners_changed = listener_configuration_changed(&previous, &config);
                 resolver.reload_config(config.clone());

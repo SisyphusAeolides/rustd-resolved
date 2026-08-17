@@ -370,4 +370,16 @@ busctl --address="$DBUS_SYSTEM_BUS_ADDRESS" get-property \
     >"$WORK/link-domains-reverted.txt"
 ! grep -F 'example.test' "$WORK/link-domains-reverted.txt" >/dev/null
 ! grep -F 'route.test' "$WORK/link-domains-reverted.txt" >/dev/null
+
+"$RESOLVECTL" --socket "$WORK/runtime/io.systemd.Resolve" \
+    query -t A example.test >"$WORK/reloaded-query.txt"
+grep -F 'example.test IN A 192.0.2.123' "$WORK/reloaded-query.txt" >/dev/null
+if grep -F 'failed to reload stub listeners:' "$WORK/daemon.log" >/dev/null; then
+    cat "$WORK/daemon.log" >&2
+    exit 1
+fi
+if grep -F 'failed to publish reloaded configuration:' "$WORK/daemon.log" >/dev/null; then
+    cat "$WORK/daemon.log" >&2
+    exit 1
+fi
 ENDSCRIPT
