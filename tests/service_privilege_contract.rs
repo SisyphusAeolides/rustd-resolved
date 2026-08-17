@@ -4,7 +4,7 @@
 fn installed_service_uses_daemon_owned_privilege_drop() {
     let unit = include_str!("../packaging/rustd/rustd-resolved.service");
     assert!(unit.contains("Type=notify"));
-    assert!(unit.contains("ExecStart=/usr/lib/rustd/rustd-resolved"));
+    assert!(unit.contains("ExecStart=/usr/lib/rustd/rustd-resolved --dbus"));
     assert!(
         !unit.lines().any(|line| line.trim_start().starts_with("User=")),
         "the daemon must start privileged enough to bind DNS sockets and execute its audited internal drop path"
@@ -18,10 +18,13 @@ fn installed_service_uses_daemon_owned_privilege_drop() {
 }
 
 #[test]
-fn service_exposes_only_native_varlink_control() {
+fn service_exposes_native_control_with_bounded_resolve1_compatibility() {
     let unit = include_str!("../packaging/rustd/rustd-resolved.service");
-    assert!(!unit.contains("--dbus"));
-    assert!(!unit.contains("org.freedesktop"));
+    assert!(unit.contains("ExecStart=/usr/lib/rustd/rustd-resolved --dbus"));
+    assert!(!unit.contains("--no-varlink"));
+    assert!(!unit.contains("/usr/lib/systemd"));
+    assert!(!unit.contains("/run/systemd/resolve"));
+
     assert!(
         include_str!("../packaging/rustd/rustd-resolved-varlink.socket")
             .contains("/run/rustd/resolve/io.rustd.Resolve")
@@ -30,4 +33,8 @@ fn service_exposes_only_native_varlink_control() {
         include_str!("../packaging/rustd/rustd-resolved-monitor.socket")
             .contains("/run/rustd/resolve/io.rustd.Resolve.Monitor")
     );
+
+    let activation = include_str!("../packaging/dbus/org.freedesktop.resolve1.service");
+    assert!(activation.contains("Exec=/usr/bin/rustctl start rustd-resolved.service"));
+    assert!(!activation.contains("SystemdService="));
 }
