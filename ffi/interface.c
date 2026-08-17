@@ -13,6 +13,10 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+/* IFLA_ALT_IFNAME is Linux rtnetlink attribute 53.  Keep the UAPI number
+ * local so builds do not depend on the age of the installed kernel headers. */
+#define RESOLVED_IFLA_ALT_IFNAME 53U
+
 static int alternative_ifindex(const char *name) {
     size_t name_length = strlen(name) + 1U;
     if (name_length > 256U) {
@@ -43,7 +47,7 @@ static int alternative_ifindex(const char *name) {
     request.link.ifi_family = AF_UNSPEC;
     struct rtattr *attribute = (struct rtattr *)(void *)
         ((uint8_t *)&request + NLMSG_ALIGN(request.header.nlmsg_len));
-    attribute->rta_type = IFLA_ALT_IFNAME;
+    attribute->rta_type = RESOLVED_IFLA_ALT_IFNAME;
     attribute->rta_len = RTA_LENGTH(name_length);
     memcpy(RTA_DATA(attribute), name, name_length);
     request.header.nlmsg_len = NLMSG_ALIGN(request.header.nlmsg_len) + attribute->rta_len;
