@@ -48,23 +48,54 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          evidence=/tmp/rustd-link-flap-namespace-ci.jsonl
           set +e
           sudo env PATH="$PATH" \
             bash tests/scenarios/test_network_churn.sh \
               --binary target/release/rustd-resolved \
               --iterations 50 \
-              --evidence-out /tmp/rustd-link-flap-ci.jsonl \
+              --evidence-out "$evidence" \
             2>&1 | tee /tmp/link-flap-live.log
           status=${PIPESTATUS[0]}
           set -e
-          sudo rm -f /tmp/rustd-link-flap-ci.jsonl
+          if [[ "$status" -eq 0 ]]; then
+            sudo chown "$(id -u):$(id -g)" "$evidence"
+            chmod 0600 "$evidence"
+            python3 - "$evidence" "$GITHUB_SHA" <<'PY'
+          import json
+          import stat
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          expected_sha = sys.argv[2]
+          mode = stat.S_IMODE(path.stat().st_mode)
+          if mode != 0o600:
+              raise SystemExit(f"evidence mode must be 0600, got {mode:o}")
+          records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+          gates = {record.get("gate") for record in records}
+          if gates != {"dns.link_flap", "dns.namespace"}:
+              raise SystemExit(f"unexpected evidence gates: {sorted(gates)}")
+          for record in records:
+              if record.get("status") != "pass":
+                  raise SystemExit(f"{record.get('gate')}: status is not pass")
+              if record.get("resolver_sha") != expected_sha:
+                  raise SystemExit(f"{record.get('gate')}: resolver_sha does not match GITHUB_SHA")
+          link = next(record for record in records if record["gate"] == "dns.link_flap")
+          if int(link.get("iterations", 0)) < 50:
+              raise SystemExit("dns.link_flap evidence records fewer than 50 iterations")
+          print("certification evidence OK: dns.link_flap,dns.namespace")
+          PY
+          fi
           exit "$status"
 
-      - name: Upload link-flap diagnostics
+      - name: Upload link-flap and namespace evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: link-flap-live-${{ github.sha }}
-          path: /tmp/link-flap-live.log
+          name: link-flap-namespace-live-${{ github.sha }}
+          path: |
+            /tmp/link-flap-live.log
+            /tmp/rustd-link-flap-namespace-ci.jsonl
           if-no-files-found: warn
           retention-days: 14

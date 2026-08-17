@@ -62,22 +62,38 @@ def terminate(process: subprocess.Popen[str] | None) -> None:
 
 
 def write_evidence(path: Path, revision: str, iterations: int) -> None:
-    record = {
-        "gate": "dns.link_flap",
-        "status": "pass",
-        "detail": (
-            "first-party network namespace campaign completed repeated veth down/up cycles; "
-            "UDP and TCP stub resolution recovered after every cycle"
-        ),
-        "ts": int(time.time()),
-        "resolver_sha": revision,
-        "iterations": iterations,
-        "source": "scripts/network-lab-driver.py:network-churn",
-    }
+    timestamp = int(time.time())
+    records = (
+        {
+            "gate": "dns.link_flap",
+            "status": "pass",
+            "detail": (
+                "first-party network namespace campaign completed repeated veth down/up cycles; "
+                "UDP and TCP stub resolution recovered after every cycle"
+            ),
+            "ts": timestamp,
+            "resolver_sha": revision,
+            "iterations": iterations,
+            "source": "scripts/network-lab-driver.py:network-churn",
+        },
+        {
+            "gate": "dns.namespace",
+            "status": "pass",
+            "detail": (
+                "resolver ran inside a dedicated Linux client network namespace while the controlled DNS "
+                "upstream ran in a separate namespace across a veth pair; UDP and TCP resolution succeeded "
+                "before and after the complete link-flap campaign"
+            ),
+            "ts": timestamp,
+            "resolver_sha": revision,
+            "source": "scripts/network-lab-driver.py:network-churn",
+        },
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-        handle.write(json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n")
+        for record in records:
+            handle.write(json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n")
 
 
 def link_flap(options: argparse.Namespace) -> int:
@@ -185,6 +201,7 @@ def link_flap(options: argparse.Namespace) -> int:
             evidence = options.evidence_out or (repository / "target/certification/dns-link-flap.jsonl")
             write_evidence(evidence.resolve(), revision, options.iterations)
             print(f"PASS dns.link_flap iterations={options.iterations} evidence={evidence}")
+            print(f"PASS dns.namespace evidence={evidence}")
             return 0
         except BaseException:
             if resolver_log.exists():
