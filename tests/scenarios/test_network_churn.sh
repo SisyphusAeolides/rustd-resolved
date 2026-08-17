@@ -3,10 +3,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-DRIVER="${RUSTD_RESOLVED_LAB_DRIVER:-}"
+DRIVER="${RUSTD_RESOLVED_LAB_DRIVER:-$ROOT/scripts/network-lab-driver.py}"
 
-if [[ -z "$DRIVER" || ! -x "$DRIVER" ]]; then
-  printf '%s: no executable lab driver configured; set RUSTD_RESOLVED_LAB_DRIVER\n' "network-churn" >&2
+if [[ ! -x "$DRIVER" ]]; then
+  printf '%s: lab driver is not executable: %s\n' "network-churn" "$DRIVER" >&2
   exit 77
 fi
 
