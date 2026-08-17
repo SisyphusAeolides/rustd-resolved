@@ -112,6 +112,7 @@ def link_flap(options: argparse.Namespace) -> int:
 
     with tempfile.TemporaryDirectory(prefix="rustd-link-flap-") as temporary:
         root = Path(temporary)
+        root.chmod(0o755)
         config = root / "resolved.conf"
         runtime = root / "runtime"
         upstream_log = root / "upstream.log"
