@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-binary=${1:?usage: direct-root-privilege-drop.sh RUSTD_RESOLVED}
+binary=${1:?usage: direct-root-privilege-drop.sh RUSTD_RESOLVED [EVIDENCE_OUT]}
+evidence_out=${2:-}
 runtime_directory=$(mktemp -d /tmp/rustd-resolved-privileges.XXXXXX)
 log_file=$(mktemp /tmp/rustd-resolved-privileges.XXXXXX.log)
 launcher_pid=
@@ -95,3 +96,52 @@ directory_gid=$(stat -c %g "$runtime_directory")
 [[ $directory_gid == "$expected_gid" ]]
 [[ $((16#$effective_caps)) -eq $((1 << 10 | 1 << 13)) ]]
 [[ $((16#$bounding_caps)) -eq $((1 << 10 | 1 << 13)) ]]
+
+if [[ -n $evidence_out ]]; then
+    revision=$(git rev-parse HEAD)
+    [[ $revision =~ ^[0-9a-f]{40}$ ]]
+    umask 077
+    python3 - "$evidence_out" "$revision" "$actual_uid" "$actual_gid" "$effective_caps" "$bounding_caps" <<'PY'
+import json
+from pathlib import Path
+import sys
+import time
+
+path = Path(sys.argv[1])
+revision = sys.argv[2]
+uid = sys.argv[3]
+gid = sys.argv[4]
+effective = sys.argv[5]
+bounding = sys.argv[6]
+timestamp = int(time.time())
+records = (
+    {
+        "gate": "resolver.capability_bounds",
+        "status": "pass",
+        "detail": (
+            "release resolver launched as root dropped to the service account with effective and bounding "
+            f"capability masks exactly 0x{effective} and 0x{bounding}, limited to capability bits 10 and 13"
+        ),
+        "ts": timestamp,
+        "resolver_sha": revision,
+        "source": "tests/direct-root-privilege-drop.sh",
+    },
+    {
+        "gate": "resolver.ownership",
+        "status": "pass",
+        "detail": (
+            f"release resolver process and runtime directory are owned by rustd-resolve uid={uid} gid={gid} "
+            "after direct root launch and privilege drop"
+        ),
+        "ts": timestamp,
+        "resolver_sha": revision,
+        "source": "tests/direct-root-privilege-drop.sh",
+    },
+)
+path.parent.mkdir(parents=True, exist_ok=True)
+with path.open("w", encoding="utf-8") as handle:
+    for record in records:
+        handle.write(json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n")
+PY
+    chmod 0600 "$evidence_out"
+fi

@@ -187,7 +187,37 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash tests/direct-root-privilege-drop.sh target/release/rustd-resolved
+          evidence=/tmp/rustd-resolver-privilege-ci.jsonl
+          bash tests/direct-root-privilege-drop.sh target/release/rustd-resolved "$evidence"
+          python3 - "$evidence" "$GITHUB_SHA" <<'PY'
+          import json
+          import stat
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          expected_sha = sys.argv[2]
+          if stat.S_IMODE(path.stat().st_mode) != 0o600:
+              raise SystemExit("privilege evidence mode must be 0600")
+          records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+          gates = {record.get("gate") for record in records}
+          expected = {"resolver.capability_bounds", "resolver.ownership"}
+          if gates != expected:
+              raise SystemExit(f"unexpected privilege evidence gates: {sorted(gates)}")
+          for record in records:
+              if record.get("status") != "pass" or record.get("resolver_sha") != expected_sha:
+                  raise SystemExit(f"invalid privilege evidence record: {record.get('gate')}")
+          print("certification evidence OK: resolver.capability_bounds,resolver.ownership")
+          PY
+
+      - name: Upload privilege certification evidence
+        if: ${{ always() && matrix.toolchain == 'stable' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: resolver-privilege-evidence-${{ github.sha }}
+          path: /tmp/rustd-resolver-privilege-ci.jsonl
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Check live DNS and Varlink path
         if: ${{ matrix.toolchain == 'stable' }}
