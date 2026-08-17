@@ -44,11 +44,17 @@ jobs:
               raise SystemExit("expected exactly one resolvectl json import")
           source = source.replace(old_import, new_import, 1)
 
-          anchor = '''        command\n            if matches!(\n                command,\n                "dns"\n                    | "domain"\n                    | "default-route"\n                    | "llmnr"\n                    | "mdns"\n                    | "dnsovertls"\n                    | "dnssec"\n                    | "nta"\n            ) && options.arguments.is_empty() =>\n        {\n            show_configuration_field(&options.socket, command, options.json.as_deref())\n        }\n'''
-          replacement = '''        command\n            if resolvectl_dbus::is_command(command) && !options.arguments.is_empty() =>\n        {\n            resolvectl_dbus::execute(command, &options.arguments, options.json.as_deref())\n        }\n        command\n            if matches!(\n                command,\n                "dns"\n                    | "domain"\n                    | "default-route"\n                    | "llmnr"\n                    | "mdns"\n                    | "dnsovertls"\n                    | "dnssec"\n                    | "nta"\n            ) && options.arguments.is_empty() =>\n        {\n            show_configuration_field(&options.socket, command, options.json.as_deref())\n        }\n'''
-          if source.count(anchor) != 1:
+          execute_anchor = '''    let Some(options) = parse_options(raw_arguments)? else {\n        return Ok(());\n    };\n    execute_options(&options)\n'''
+          execute_replacement = '''    if env::var("SYSTEMD_INVOKED_AS").ok().as_deref() == Some("resolvconf") {\n        let mut input = String::new();\n        if resolvectl_dbus::resolvconf_requires_input(&raw_arguments)? {\n            io::stdin().read_to_string(&mut input)?;\n        }\n        return resolvectl_dbus::execute_resolvconf(&raw_arguments, &input);\n    }\n\n    let Some(options) = parse_options(raw_arguments)? else {\n        return Ok(());\n    };\n    execute_options(&options)\n'''
+          if source.count(execute_anchor) != 1:
+              raise SystemExit("expected exactly one native option-dispatch boundary")
+          source = source.replace(execute_anchor, execute_replacement, 1)
+
+          command_anchor = '''        command\n            if matches!(\n                command,\n                "dns"\n                    | "domain"\n                    | "default-route"\n                    | "llmnr"\n                    | "mdns"\n                    | "dnsovertls"\n                    | "dnssec"\n                    | "nta"\n            ) && options.arguments.is_empty() =>\n        {\n            show_configuration_field(&options.socket, command, options.json.as_deref())\n        }\n'''
+          command_replacement = '''        command\n            if resolvectl_dbus::is_command(command) && !options.arguments.is_empty() =>\n        {\n            resolvectl_dbus::execute(command, &options.arguments, options.json.as_deref())\n        }\n        command\n            if matches!(\n                command,\n                "dns"\n                    | "domain"\n                    | "default-route"\n                    | "llmnr"\n                    | "mdns"\n                    | "dnsovertls"\n                    | "dnssec"\n                    | "nta"\n            ) && options.arguments.is_empty() =>\n        {\n            show_configuration_field(&options.socket, command, options.json.as_deref())\n        }\n'''
+          if source.count(command_anchor) != 1:
               raise SystemExit("expected exactly one configuration command dispatch block")
-          source = source.replace(anchor, replacement, 1)
+          source = source.replace(command_anchor, command_replacement, 1)
           path.write_text(source)
           PY
 
@@ -67,5 +73,5 @@ jobs:
           git config user.name 'Kenny Glowner'
           git config user.email 'SisyphusAeolides@pm.me'
           git add -- src/bin/rustd_resolvectl_impl.rs
-          git commit -m 'Route resolver link commands over D-Bus'
+          git commit -m 'Restore resolver compatibility commands'
           git push origin HEAD:main
