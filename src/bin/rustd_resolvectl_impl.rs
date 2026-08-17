@@ -2,6 +2,7 @@
 mod resolvectl_rr;
 
 use rustd_resolved::json::{self, JsonObject, Value};
+use rustd_resolved::resolvectl_dbus;
 use std::env;
 use std::error::Error;
 use std::fmt;
@@ -168,6 +169,14 @@ fn execute() -> Result<(), Box<dyn Error>> {
         })
         .collect::<Result<Vec<_>, _>>()?;
 
+    if env::var("SYSTEMD_INVOKED_AS").ok().as_deref() == Some("resolvconf") {
+        let mut input = String::new();
+        if resolvectl_dbus::resolvconf_requires_input(&raw_arguments)? {
+            io::stdin().read_to_string(&mut input)?;
+        }
+        return resolvectl_dbus::execute_resolvconf(&raw_arguments, &input);
+    }
+
     let Some(options) = parse_options(raw_arguments)? else {
         return Ok(());
     };
@@ -221,6 +230,11 @@ fn execute_options(options: &Options) -> Result<(), Box<dyn Error>> {
             "io.rustd.Resolve.ResetServerFeatures",
             options.ask_password,
         ),
+        command
+            if resolvectl_dbus::is_command(command) && !options.arguments.is_empty() =>
+        {
+            resolvectl_dbus::execute(command, &options.arguments, options.json.as_deref())
+        }
         command
             if matches!(
                 command,
