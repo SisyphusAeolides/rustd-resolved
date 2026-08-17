@@ -86,11 +86,15 @@ impl BoundedExecutor {
             work: Box::new(work),
         };
 
+        // Account for the job before making it visible to a worker. A worker
+        // may execute a dispatched job immediately, so incrementing `active`
+        // after dispatch can race its completion and underflow the counter.
+        self.metrics.active.fetch_add(1, Ordering::Relaxed);
         if self.dispatch(job) {
             self.metrics.admitted.fetch_add(1, Ordering::Relaxed);
-            self.metrics.active.fetch_add(1, Ordering::Relaxed);
             true
         } else {
+            self.metrics.active.fetch_sub(1, Ordering::Relaxed);
             self.release_peer(peer_key);
             self.metrics
                 .rejected_queue_full
@@ -216,6 +220,14 @@ mod tests {
             gate_a.wait();
         }));
 
+        // Wait until the first job is executing and therefore cannot consume
+        // another job. With one worker and queue depth one, the next job must
+        // fill the sole queue slot and every later submission must be rejected.
+        while started.load(Ordering::SeqCst) == 0 {
+            thread::yield_now();
+        }
+        assert!(executor.try_submit(1, || {}));
+
         for _ in 0..4 {
             assert!(
                 !executor.try_submit(1, || {}),
@@ -229,6 +241,7 @@ mod tests {
                 .load(Ordering::Relaxed),
             4
         );
+        assert_eq!(executor.metrics().active.load(Ordering::Relaxed), 2);
 
         gate.wait();
         assert_eq!(started.load(Ordering::SeqCst), 1);
