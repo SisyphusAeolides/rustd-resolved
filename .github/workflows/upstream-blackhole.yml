@@ -16,7 +16,7 @@ concurrency:
 jobs:
   failover:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -34,14 +34,14 @@ jobs:
           set -euo pipefail
           cargo build --release --locked --bin rustd-resolved
 
-      - name: Exercise 20 independent silent-primary failovers
+      - name: Exercise 100 independent silent-primary failovers
         shell: bash
         run: |
           set -euo pipefail
           evidence=/tmp/rustd-upstream-blackhole-ci.jsonl
           python3 tests/scenarios/upstream_blackhole_cert.py \
             target/release/rustd-resolved \
-            --iterations 20 \
+            --iterations 100 \
             --evidence-out "$evidence" \
             2>&1 | tee /tmp/upstream-blackhole.log
           chmod 0600 "$evidence"
@@ -54,20 +54,21 @@ jobs:
           path = Path(sys.argv[1])
           expected_sha = sys.argv[2]
           if stat.S_IMODE(path.stat().st_mode) != 0o600:
-              raise SystemExit("blackhole evidence mode must be 0600")
+              raise SystemExit("failover evidence mode must be 0600")
           records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
-          if len(records) != 1:
-              raise SystemExit(f"expected one blackhole evidence record, got {len(records)}")
-          record = records[0]
-          if record.get("gate") != "dns.upstream_blackhole" or record.get("status") != "pass":
-              raise SystemExit("blackhole evidence gate/status is invalid")
-          if record.get("resolver_sha") != expected_sha:
-              raise SystemExit("blackhole evidence resolver_sha does not match GITHUB_SHA")
-          if int(record.get("iterations", 0)) < 20:
-              raise SystemExit("blackhole evidence records fewer than 20 iterations")
-          if not str(record.get("detail", "")).strip():
-              raise SystemExit("blackhole evidence detail is empty")
-          print("certification evidence OK: dns.upstream_blackhole")
+          expected = {"dns.upstream_blackhole", "dns.failover_churn"}
+          if {record.get("gate") for record in records} != expected:
+              raise SystemExit(f"unexpected failover evidence gates: {[record.get('gate') for record in records]}")
+          for record in records:
+              if record.get("status") != "pass":
+                  raise SystemExit(f"{record.get('gate')}: status is not pass")
+              if record.get("resolver_sha") != expected_sha:
+                  raise SystemExit(f"{record.get('gate')}: resolver_sha does not match GITHUB_SHA")
+              if int(record.get("iterations", 0)) < 100:
+                  raise SystemExit(f"{record.get('gate')}: fewer than 100 independent failovers")
+              if not str(record.get("detail", "")).strip():
+                  raise SystemExit(f"{record.get('gate')}: empty detail")
+          print("certification evidence OK: dns.upstream_blackhole,dns.failover_churn")
           PY
 
       - name: Upload failover evidence and diagnostics
