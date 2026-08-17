@@ -47,6 +47,28 @@ def question_end(packet: bytes) -> int:
     return offset + 4
 
 
+def skip_name(packet: bytes, offset: int) -> int:
+    while True:
+        if offset >= len(packet):
+            raise ValueError("truncated DNS name")
+        length = packet[offset]
+        if length & 0xC0 == 0xC0:
+            if offset + 2 > len(packet):
+                raise ValueError("truncated DNS compression pointer")
+            pointer = struct.unpack_from("!H", packet, offset)[0] & 0x3FFF
+            if pointer >= len(packet):
+                raise ValueError("invalid DNS compression pointer")
+            return offset + 2
+        if length & 0xC0:
+            raise ValueError("invalid DNS label encoding")
+        offset += 1
+        if length == 0:
+            return offset
+        if length > 63 or offset + length > len(packet):
+            raise ValueError("invalid DNS label")
+        offset += length
+
+
 def make_response(query: bytes, address: str) -> bytes:
     end = question_end(query)
     identifier, query_flags = struct.unpack_from("!HH", query, 0)
@@ -158,15 +180,24 @@ def answer_address(packet: bytes, identifier: int) -> str:
     response_id, flags, qdcount, ancount = struct.unpack_from("!HHHH", packet, 0)
     if response_id != identifier or flags & 0x8000 == 0 or flags & 0x000F:
         raise AssertionError("invalid DNS response envelope")
-    if qdcount != 1 or ancount != 1:
-        raise AssertionError("expected exactly one answer")
-    end = question_end(packet)
-    if end + 16 > len(packet) or packet[end : end + 2] != b"\xc0\x0c":
-        raise AssertionError("unexpected answer encoding")
-    rtype, rclass, _ttl, rdlength = struct.unpack_from("!HHIH", packet, end + 2)
-    if (rtype, rclass, rdlength) != (1, 1, 4):
-        raise AssertionError("unexpected answer record")
-    return socket.inet_ntoa(packet[end + 12 : end + 16])
+    if qdcount != 1 or ancount < 1:
+        raise AssertionError("expected at least one answer")
+    offset = question_end(packet)
+    for _ in range(ancount):
+        try:
+            offset = skip_name(packet, offset)
+        except ValueError as error:
+            raise AssertionError(str(error)) from error
+        if offset + 10 > len(packet):
+            raise AssertionError("truncated answer record")
+        rtype, rclass, _ttl, rdlength = struct.unpack_from("!HHIH", packet, offset)
+        offset += 10
+        if offset + rdlength > len(packet):
+            raise AssertionError("truncated answer data")
+        if (rtype, rclass, rdlength) == (1, 1, 4):
+            return socket.inet_ntoa(packet[offset : offset + 4])
+        offset += rdlength
+    raise AssertionError("A answer is missing")
 
 
 def query_udp(port: int, identifier: int, name: str) -> str:
@@ -273,6 +304,7 @@ def run(binary: Path, cycles: int) -> None:
     first.start()
     second.start()
     stub_port = reserve_dual_port()
+    proxy_port = reserve_dual_port()
     try:
         with tempfile.TemporaryDirectory(prefix="rustd-resolved-churn-") as temporary:
             root = Path(temporary)
@@ -288,6 +320,8 @@ def run(binary: Path, cycles: int) -> None:
                         str(config),
                         "--listen",
                         f"{LOOPBACK}:{stub_port}",
+                        "--proxy-listen",
+                        f"{LOOPBACK}:{proxy_port}",
                         "--runtime-directory",
                         str(runtime),
                         "--workers",
