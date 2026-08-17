@@ -1,0 +1,77 @@
+name: Live strict DoT certificate failure
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dot-cert-fail-live-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dot-cert-fail:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install native dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends gfortran libssl-dev liburing-dev openssl
+
+      - name: Build resolver
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release --locked --bin rustd-resolved
+
+      - name: Run live strict DoT certificate failure campaign
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=/tmp/rustd-dot-cert-fail-ci.jsonl
+          python3 tests/scenarios/dot_cert_fail_live.py \
+            --binary target/release/rustd-resolved \
+            --evidence-out "$evidence" \
+            --source "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          chmod 0600 "$evidence"
+          python3 - "$evidence" "$GITHUB_SHA" <<'PY'
+          import json
+          import stat
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          expected_sha = sys.argv[2]
+          if stat.S_IMODE(path.stat().st_mode) != 0o600:
+              raise SystemExit("DoT evidence mode must be 0600")
+          records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+          if len(records) != 1:
+              raise SystemExit("expected exactly one DoT evidence record")
+          record = records[0]
+          if record.get("gate") != "dns.dot_cert_fail" or record.get("status") != "pass":
+              raise SystemExit("unexpected DoT evidence gate/status")
+          if record.get("resolver_sha") != expected_sha:
+              raise SystemExit("DoT evidence SHA mismatch")
+          if not str(record.get("detail", "")).strip():
+              raise SystemExit("DoT evidence detail is empty")
+          print("certification evidence OK: dns.dot_cert_fail")
+          PY
+
+      - name: Upload DoT certificate evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dot-cert-fail-live-${{ github.sha }}
+          path: /tmp/rustd-dot-cert-fail-ci.jsonl
+          if-no-files-found: warn
+          retention-days: 14
