@@ -2,17 +2,30 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Resolver DNS correctness / leak-prevention certification.
 set -euo pipefail
+umask 077
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 REPORT_DIR="${RUSTD_CERT_REPORT_DIR:-$ROOT/target/certification}"
 MODE="${RUSTD_CERT_MODE:-smoke}"
 EVIDENCE="${RUSTD_RESOLVED_LAB_EVIDENCE:-}"
 BENCHMARK_REPORT="${RUSTD_RESOLVED_BENCH_REPORT:-}"
+REPORT_TMP=""
+NORMALIZED=""
+
+cleanup() {
+  if [[ -n "$NORMALIZED" ]]; then
+    rm -f -- "$NORMALIZED"
+  fi
+  if [[ -n "$REPORT_TMP" ]]; then
+    rm -f -- "$REPORT_TMP"
+  fi
+}
+trap cleanup EXIT
 
 usage() {
-  cat >&2 <<'EOF'
+  cat >&2 <<'USAGE'
 usage: installed-certification.sh [--smoke|--release] [--evidence FILE] [--benchmark-report FILE]
-EOF
+USAGE
 }
 
 while [[ $# -gt 0 ]]; do
@@ -61,12 +74,13 @@ if [[ ! "$REVISION" =~ ^[0-9a-f]{40}$ ]]; then
   exit 2
 fi
 
-mkdir -p "$REPORT_DIR"
+mkdir -p -- "$REPORT_DIR"
 REPORT="$REPORT_DIR/resolver-certification.jsonl"
-: >"$REPORT"
+REPORT_TMP="$(mktemp "$REPORT_DIR/.resolver-certification.XXXXXX")"
+chmod 0600 "$REPORT_TMP"
 
 log() {
-  python3 - "$1" "$2" "$3" "$REVISION" <<'PY' | tee -a "$REPORT"
+  python3 - "$1" "$2" "$3" "$REVISION" <<'PY' | tee -a "$REPORT_TMP"
 import json
 import sys
 import time
@@ -80,6 +94,13 @@ print(json.dumps({
     "resolver_sha": revision,
 }, sort_keys=True, separators=(",", ":")))
 PY
+}
+
+publish_report() {
+  chmod 0600 "$REPORT_TMP"
+  mv -f -- "$REPORT_TMP" "$REPORT"
+  REPORT_TMP=""
+  echo "Resolver certification report: $REPORT"
 }
 
 cargo test --locked --lib spawn_does_not_require -- --test-threads=1
@@ -111,14 +132,14 @@ required_lab_gates=(
 )
 
 if [[ -n "$EVIDENCE" ]]; then
-  normalized="$(mktemp)"
-  trap 'rm -f "$normalized"' EXIT
+  NORMALIZED="$(mktemp "$REPORT_DIR/.resolver-evidence.XXXXXX")"
+  chmod 0600 "$NORMALIZED"
   python3 "$ROOT/scripts/validate-certification-evidence.py" \
     "$EVIDENCE" \
-    --expected-sha "$REVISION" >"$normalized"
-  cat "$normalized" | tee -a "$REPORT"
-  rm -f "$normalized"
-  trap - EXIT
+    --expected-sha "$REVISION" >"$NORMALIZED"
+  tee -a "$REPORT_TMP" <"$NORMALIZED"
+  rm -f -- "$NORMALIZED"
+  NORMALIZED=""
 else
   for gate in "${required_lab_gates[@]}"; do
     log "$gate" pending "requires SHA-bound installed-system lab evidence"
@@ -126,17 +147,20 @@ else
 fi
 
 if [[ -n "$BENCHMARK_REPORT" ]]; then
+  NORMALIZED="$(mktemp "$REPORT_DIR/.resolver-benchmark.XXXXXX")"
+  chmod 0600 "$NORMALIZED"
   python3 "$ROOT/scripts/validate-benchmark-report.py" \
     "$BENCHMARK_REPORT" \
-    --expected-sha "$REVISION" | tee -a "$REPORT"
+    --expected-sha "$REVISION" >"$NORMALIZED"
+  tee -a "$REPORT_TMP" <"$NORMALIZED"
+  rm -f -- "$NORMALIZED"
+  NORMALIZED=""
 else
   log performance.resolver pending "requires a paired systemd-resolved benchmark report"
 fi
 
-echo "Resolver certification report: $REPORT"
-
 if [[ "$MODE" == release ]]; then
-  python3 - "$REPORT" <<'PY'
+  if ! python3 - "$REPORT_TMP" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -152,4 +176,10 @@ for raw in path.read_text(encoding="utf-8").splitlines():
 if failures:
     raise SystemExit("release certification incomplete: " + ", ".join(failures))
 PY
+  then
+    publish_report
+    exit 1
+  fi
 fi
+
+publish_report

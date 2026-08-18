@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -24,6 +27,9 @@ validator = load_script(
     "resolver_certification_validator", ROOT / "scripts/validate-certification-evidence.py"
 )
 soak = load_script("resolver_resource_soak", ROOT / "scripts/resource-soak-driver.py")
+benchmark = load_script(
+    "resolver_benchmark_validator", ROOT / "scripts/validate-benchmark-report.py"
+)
 
 
 class SecureEvidenceTests(unittest.TestCase):
@@ -69,6 +75,120 @@ class SecureEvidenceTests(unittest.TestCase):
             path.chmod(0o600)
             with self.assertRaises(ValueError):
                 validator.read_secure_file(path)
+
+
+class BenchmarkEvidenceTests(unittest.TestCase):
+    def base_record(self) -> dict[str, object]:
+        groups = {
+            name: {
+                "reference": {"samples": 100},
+                "candidate": {"samples": 100},
+                "candidate_to_reference_ratio": {
+                    "mean_ms": 0.90,
+                    "p95_ms": 0.90,
+                    "p99_ms": 0.90,
+                },
+            }
+            for name in ("all", "udp", "tcp")
+        }
+        return {
+            "candidate_sha": "a" * 40,
+            "reference_version": "systemd 261",
+            "passed": True,
+            "failures": [],
+            "functional": {"passed": 100, "failed": 0},
+            "thresholds": {
+                "minimum_samples": 100,
+                "max_mean_ratio": 1.0,
+                "max_p95_ratio": 0.95,
+                "max_p99_ratio": 0.95,
+            },
+            "groups": groups,
+        }
+
+    def write_record(self, directory: str, record: dict[str, object]) -> Path:
+        path = Path(directory) / "benchmark.json"
+        path.write_text(json.dumps(record), encoding="utf-8")
+        path.chmod(0o600)
+        return path
+
+    def run_validator(self, path: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "scripts/validate-benchmark-report.py"),
+                str(path),
+                "--expected-sha",
+                "a" * 40,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def test_valid_benchmark_report_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = self.run_validator(self.write_record(directory, self.base_record()))
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_nonfinite_ratio_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            record = self.base_record()
+            groups = record["groups"]
+            assert isinstance(groups, dict)
+            all_group = groups["all"]
+            assert isinstance(all_group, dict)
+            ratios = all_group["candidate_to_reference_ratio"]
+            assert isinstance(ratios, dict)
+            ratios["p95_ms"] = float("nan")
+            result = self.run_validator(self.write_record(directory, record))
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("non-finite JSON number", result.stderr)
+
+    def test_negative_ratio_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            record = self.base_record()
+            groups = record["groups"]
+            assert isinstance(groups, dict)
+            udp = groups["udp"]
+            assert isinstance(udp, dict)
+            ratios = udp["candidate_to_reference_ratio"]
+            assert isinstance(ratios, dict)
+            ratios["mean_ms"] = -1.0
+            result = self.run_validator(self.write_record(directory, record))
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("must be positive", result.stderr)
+
+    def test_boolean_sample_count_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            record = self.base_record()
+            groups = record["groups"]
+            assert isinstance(groups, dict)
+            tcp = groups["tcp"]
+            assert isinstance(tcp, dict)
+            reference = tcp["reference"]
+            assert isinstance(reference, dict)
+            reference["samples"] = True
+            result = self.run_validator(self.write_record(directory, record))
+            self.assertEqual(result.returncode, 2)
+
+    def test_benchmark_symlink_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = self.write_record(directory, self.base_record())
+            link = root / "linked-benchmark.json"
+            link.symlink_to(target)
+            result = self.run_validator(link)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("cannot securely open", result.stderr)
+
+    def test_benchmark_fifo_is_rejected_without_blocking(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "benchmark.pipe"
+            os.mkfifo(path, 0o600)
+            result = self.run_validator(path)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("not a regular file", result.stderr)
 
 
 class LoadLivenessTests(unittest.TestCase):

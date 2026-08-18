@@ -27,6 +27,37 @@ jobs:
           set -euo pipefail
           python3 -m py_compile \
             scripts/resource-soak-driver.py \
+            scripts/validate-benchmark-report.py \
             scripts/validate-certification-evidence.py \
             tests/test-certification-hardening.py
           python3 tests/test-certification-hardening.py
+
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          mkdir -p "$work/bin" "$work/reports"
+          cat >"$work/bin/cargo" <<'SH'
+          #!/usr/bin/env bash
+          exit 0
+          SH
+          chmod 0755 "$work/bin/cargo"
+          printf 'protected\n' >"$work/protected"
+          ln -s "$work/protected" "$work/reports/resolver-certification.jsonl"
+          PATH="$work/bin:$PATH" \
+            RUSTD_CERT_REPORT_DIR="$work/reports" \
+            scripts/installed-certification.sh --smoke
+          test "$(cat "$work/protected")" = protected
+          test ! -L "$work/reports/resolver-certification.jsonl"
+          test "$(stat -c '%a' "$work/reports/resolver-certification.jsonl")" = 600
+          python3 - "$work/reports/resolver-certification.jsonl" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          records = [
+              json.loads(line)
+              for line in pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
+              if line.strip()
+          ]
+          assert records
+          assert all(record.get("resolver_sha") for record in records)
+          PY
