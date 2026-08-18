@@ -1,6 +1,6 @@
-schema=rustd-resolved-source-cleanup-diagnostic-v1
+schema=rustd-resolved-source-cleanup-diagnostic-v2
 status=failure
-tested_sha=7fd01e36129620b2e9b4ff3ddb979e42c0bc80dd
+tested_sha=0d4e440bcbf2a530ea24a4be39bb5b50985b151d
 --- tail ---
 From https://github.com/SisyphusAeolides/rustd-resolved
  * branch            main       -> FETCH_HEAD
@@ -9,4 +9,4 @@ Your branch is up to date with 'origin/main'.
 From https://github.com/SisyphusAeolides/rustd-resolved
  * branch            main       -> FETCH_HEAD
 Already up to date.
-transport pool constructor is unexpected
+idle-reap loop missing
