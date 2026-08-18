@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
@@ -38,6 +38,7 @@ pub struct PooledConn {
 
 pub struct TransportPool {
     conns: Mutex<HashMap<Endpoint, Vec<PooledConn>>>,
+    endpoint_inflight: Mutex<HashMap<Endpoint, Weak<Semaphore>>>,
     max_per_ep: usize,
     idle: Duration,
     global_inflight: Arc<Semaphore>,
@@ -45,12 +46,25 @@ pub struct TransportPool {
 
 impl TransportPool {
     pub fn new(max_per_ep: usize, max_global: usize) -> Arc<Self> {
+        let max_per_ep = max_per_ep.max(1);
+        let max_global = max_global.max(1);
         Arc::new(Self {
             conns: Mutex::new(HashMap::new()),
+            endpoint_inflight: Mutex::new(HashMap::new()),
             max_per_ep,
             idle: Duration::from_secs(90),
             global_inflight: Arc::new(Semaphore::new(max_global)),
         })
+    }
+
+    fn endpoint_semaphore(&self, endpoint: &Endpoint) -> Arc<Semaphore> {
+        let mut limits = self.endpoint_inflight.lock();
+        if let Some(limit) = limits.get(endpoint).and_then(Weak::upgrade) {
+            return limit;
+        }
+        let limit = Arc::new(Semaphore::new(self.max_per_ep));
+        limits.insert(endpoint.clone(), Arc::downgrade(&limit));
+        limit
     }
 
     pub async fn exchange(
@@ -59,9 +73,14 @@ impl TransportPool {
         query: Bytes,
         timeout: Duration,
     ) -> Result<(Bytes, Duration), PoolErr> {
-        let _permit = self
+        let _global_permit = self
             .global_inflight
             .clone()
+            .acquire_owned()
+            .await
+            .map_err(|_| PoolErr::Shutdown)?;
+        let _endpoint_permit = self
+            .endpoint_semaphore(ep)
             .acquire_owned()
             .await
             .map_err(|_| PoolErr::Shutdown)?;
@@ -130,10 +149,14 @@ impl TransportPool {
 
     pub fn reap_idle(&self) {
         let now = Instant::now();
-        let mut g = self.conns.lock();
-        for v in g.values_mut() {
-            v.retain(|c| c.healthy && now.duration_since(c.last_used) < self.idle);
+        let mut conns = self.conns.lock();
+        for entries in conns.values_mut() {
+            entries.retain(|conn| conn.healthy && now.duration_since(conn.last_used) < self.idle);
         }
+        drop(conns);
+        self.endpoint_inflight
+            .lock()
+            .retain(|_, limit| limit.strong_count() > 0);
     }
 }
 
@@ -144,4 +167,26 @@ pub enum PoolErr {
     Shutdown,
     Unimplemented(&'static str),
     Tls(String),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn endpoint_limit_is_shared_and_never_zero() {
+        let pool = TransportPool::new(0, 0);
+        let endpoint = Endpoint {
+            kind: TrKind::Udp,
+            addr: "127.0.0.1:53".parse().expect("socket address"),
+            sni: None,
+            doh_url: None,
+            ifindex: 0,
+        };
+        let first = pool.endpoint_semaphore(&endpoint);
+        let second = pool.endpoint_semaphore(&endpoint);
+        assert!(Arc::ptr_eq(&first, &second));
+        assert_eq!(first.available_permits(), 1);
+        assert_eq!(pool.global_inflight.available_permits(), 1);
+    }
 }
