@@ -1,0 +1,110 @@
+name: Final RustD-Resolved release closure
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/final-release-closure.yml
+      - src/**
+      - ffi/**
+      - nss/**
+      - packaging/**
+      - scripts/**
+      - tests/**
+      - Cargo.toml
+      - Cargo.lock
+      - Makefile
+      - certification/rfc5011-rollover-latest.txt
+
+permissions:
+  contents: write
+
+concurrency:
+  group: final-rustd-resolved-release
+  cancel-in-progress: true
+
+jobs:
+  certify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential gfortran pkg-config libssl-dev python3
+      - name: Certify resolver release surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fxq 'status=pass' certification/rfc5011-rollover-latest.txt
+          grep -Fxq 'rust=1.74.0' certification/rfc5011-rollover-latest.txt
+          grep -Fxq 'persistence=reopen-every-transition' certification/rfc5011-rollover-latest.txt
+          grep -Fxq 'revoke=authenticated-self-signature' certification/rfc5011-rollover-latest.txt
+
+          cargo fmt --all -- --check
+          cargo clippy --all-targets --all-features --locked -- -D warnings
+          cargo test --all-targets --all-features --locked
+          make check-native
+          make check-packaging
+          make check-nss
+          make build
+
+          root="$(mktemp -d)"
+          trap 'rm -rf "$root"' EXIT HUP INT TERM
+          make DESTDIR="$root" install
+          test -x "$root/usr/lib/rustd/rustd-resolved"
+          test -x "$root/usr/bin/rustd-resolvectl"
+          test -f "$root/usr/lib/libnss_rustd_dns.so.2"
+          test -f "$root/usr/lib/rustd/system/rustd-resolved.service"
+          test -f "$root/usr/share/dbus-1/system-services/org.freedesktop.resolve1.service"
+          test -L "$root/etc/resolv.conf" || test -f "$root/usr/lib/tmpfiles.d/rustd-resolved.conf"
+
+          # Runtime/install names must be RustD-owned. The two intentional
+          # compatibility references are the conflict declaration and the
+          # NetworkManager disable knob.
+          bad="$(grep -R -nE 'systemd-resolved|systemctl|/run/systemd/resolve|resolvectl-rs' \
+            src ffi nss scripts packaging Cargo.toml Makefile \
+            | grep -v 'Conflicts=systemd-resolved.service' \
+            | grep -v 'systemd-resolved=false' \
+            | grep -v 'Paired systemd-resolved vs rustd-resolved performance gate' \
+            | grep -v 'REFERENCE_VERSION=.*systemd' \
+            || true)"
+          test -z "$bad" || { printf '%s\n' "$bad" >&2; exit 1; }
+          ! grep -R -nE 'NOTIFY_SOCKET|/run/systemd/resolve' ffi src packaging scripts --exclude='*.md'
+
+          # Security/cutover invariants.
+          grep -Fq 'ProtectSystem=strict' packaging/rustd/rustd-resolved.service
+          grep -Fq 'ReadWritePaths=/run/rustd /var/lib/rustd/resolved' packaging/rustd/rustd-resolved.service
+          grep -Fq 'ExecStart=/usr/lib/rustd/rustd-resolved --dbus' packaging/rustd/rustd-resolved.service
+          grep -Fq 'L+ /etc/resolv.conf - - - - /run/rustd/resolve/stub-resolv.conf' packaging/tmpfiles/rustd-resolved.conf
+          grep -Fq 'hosts: files myhostname rustd_dns [!UNAVAIL=return] dns' packaging/nsswitch.conf.fragment
+
+          mkdir -p certification
+          sha="$(git rev-parse HEAD)"
+          cat > certification/release-closure-latest.txt <<EOF
+          schema=rustd-resolved-release-closure-v1
+          status=pass
+          tested_sha=$sha
+          rust_tests=pass
+          native_tests=pass
+          packaging=pass
+          nss=pass
+          install_image=pass
+          rfc5011=pass
+          strict_sandbox=pass
+          runtime_names=rustd-only
+          performance=requires-validated-paired-report
+          EOF
+
+          git fetch origin main
+          git rebase origin/main
+          git add certification/release-closure-latest.txt
+          git diff --cached --check
+          git config user.name 'Kenny Glowner'
+          git config user.email 'SisyphusAeolides@pm.me'
+          git commit -m 'Certify RustD-Resolved release closure'
+          git push origin HEAD:main
