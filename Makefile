@@ -76,6 +76,8 @@ check-packaging:
 	grep -Fq 'ExecStart=/usr/lib/rustd/rustd-resolved --dbus' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'Conflicts=systemd-resolved.service' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'ProtectSystem=strict' packaging/rustd/rustd-resolved.service; \
+	grep -Fq 'ReadWritePaths=/run/rustd /var/lib/rustd/resolved' packaging/rustd/rustd-resolved.service; \
+	grep -Fq 'd /var/lib/rustd/resolved 0750 rustd-resolve rustd-resolve -' packaging/tmpfiles/rustd-resolved.conf; \
 	test -f packaging/NetworkManager/conf.d/20-rustd-resolved.conf; \
 	grep -Fq 'dns=none' packaging/NetworkManager/conf.d/20-rustd-resolved.conf; \
 	grep -Fq 'rc-manager=unmanaged' packaging/NetworkManager/conf.d/20-rustd-resolved.conf; \
