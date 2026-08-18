@@ -3,10 +3,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-DRIVER="${RUSTD_RESOLVED_LAB_DRIVER:-}"
+DRIVER="${RUSTD_RESOLVED_VPN_SPLIT_DNS_DRIVER:-$ROOT/scripts/vpn-split-dns-driver.py}"
 
-if [[ -z "$DRIVER" || ! -x "$DRIVER" ]]; then
-  printf '%s: no executable lab driver configured; set RUSTD_RESOLVED_LAB_DRIVER\n' "vpn-split-dns" >&2
+if [[ ! -x "$DRIVER" ]]; then
+  printf 'vpn-split-dns: lab driver is not executable: %s\n' "$DRIVER" >&2
   exit 77
 fi
 
