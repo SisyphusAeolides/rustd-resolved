@@ -41,14 +41,15 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential gfortran pkg-config libssl-dev liburing-dev python3
       - name: Certify resolver release surface
+        id: release_core
+        continue-on-error: true
         run: |
+          exec > >(tee /tmp/rustd-resolved-release.log) 2>&1
           grep -Fxq 'status=pass' certification/rfc5011-rollover-latest.txt
           grep -Fxq 'rust=1.74.0' certification/rfc5011-rollover-latest.txt
           grep -Fxq 'persistence=reopen-every-transition' certification/rfc5011-rollover-latest.txt
           grep -Fxq 'revoke=authenticated-self-signature' certification/rfc5011-rollover-latest.txt
 
-          # Make the io_uring memory-safety and peer-addressing fixes part of
-          # the final release contract rather than relying on a side workflow.
           cc -std=c11 -O1 -g -Wall -Wextra -Werror -Iffi \
             -fsanitize=address,undefined -fno-omit-frame-pointer \
             ffi/test_iouring_dns.c ffi/iouring_dns.c -luring \
@@ -68,7 +69,6 @@ jobs:
           make check-nss
           make build
 
-          # Package/build dependency closure for the unconditional io_uring FFI.
           grep -Fq 'liburing-dev' packaging/debian/control
           grep -Eq "depends=.*'liburing'" PKGBUILD
           grep -Eq "makedepends=.*'liburing'" PKGBUILD
@@ -85,9 +85,6 @@ jobs:
           test -f "$root/usr/share/dbus-1/system-services/org.freedesktop.resolve1.service"
           test -f "$root/usr/lib/tmpfiles.d/rustd-resolved.conf"
 
-          # Judge cutover identity from the actual install image. Source-side
-          # tests and certification scripts intentionally name the legacy
-          # implementation when asserting that it is disabled or absent.
           bad="$(grep -R -nE 'systemctl|/run/systemd/resolve|resolvectl-rs' "$root" || true)"
           test -z "$bad" || { printf '%s\n' "$bad" >&2; exit 1; }
           legacy="$(grep -R -nF 'systemd-resolved' "$root" \
@@ -96,7 +93,6 @@ jobs:
             || true)"
           test -z "$legacy" || { printf '%s\n' "$legacy" >&2; exit 1; }
 
-          # Security/cutover invariants.
           grep -Fq 'ProtectSystem=strict' packaging/rustd/rustd-resolved.service
           grep -Fq 'ReadWritePaths=/run/rustd /var/lib/rustd/resolved' packaging/rustd/rustd-resolved.service
           grep -Fq 'ExecStart=/usr/lib/rustd/rustd-resolved --dbus' packaging/rustd/rustd-resolved.service
@@ -132,3 +128,25 @@ jobs:
           git config user.email 'SisyphusAeolides@pm.me'
           git commit -m 'Certify RustD-Resolved core release closure'
           git push origin HEAD:main
+
+      - name: Publish release failure diagnostic
+        if: steps.release_core.outcome != 'success'
+        run: |
+          git reset --hard HEAD
+          git fetch origin main
+          git checkout main
+          git pull --ff-only origin main
+          mkdir -p certification
+          {
+            printf 'schema=rustd-resolved-release-diagnostic-v1\n'
+            printf 'status=failure\n'
+            printf 'tested_sha=%s\n' "$GITHUB_SHA"
+            printf '%s\n' '--- tail ---'
+            tail -n 300 /tmp/rustd-resolved-release.log || true
+          } > certification/release-closure-diagnostic.txt
+          git add certification/release-closure-diagnostic.txt
+          git config user.name 'Kenny Glowner'
+          git config user.email 'SisyphusAeolides@pm.me'
+          git commit -m 'Record RustD-Resolved release closure diagnostic'
+          git push origin HEAD:main
+          exit 1
