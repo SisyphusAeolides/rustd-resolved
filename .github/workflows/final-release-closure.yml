@@ -1,5 +1,5 @@
 name: Final RustD-Resolved release closure
-# rerun on formatted Fedora release head
+# certify the warning-clean Fedora resolver head
 
 defaults:
   run:
@@ -98,7 +98,7 @@ jobs:
           grep -Fq 'ReadWritePaths=/run/rustd /var/lib/rustd/resolved' packaging/rustd/rustd-resolved.service
           grep -Fq 'ExecStart=/usr/lib/rustd/rustd-resolved --dbus' packaging/rustd/rustd-resolved.service
           grep -Fq 'L+ /etc/resolv.conf - - - - /run/rustd/resolve/stub-resolv.conf' packaging/tmpfiles/rustd-resolved.conf
-          grep -Fq 'hosts: files myhostname rustd_dns [!UNAVAIL=return] dns' packaging/nsswitch.conf.fragment
+          grep -Fq 'hosts: files rustd_dns [!UNAVAIL=return] dns' packaging/nsswitch.conf.fragment
 
           mkdir -p certification
           sha="$(git rev-parse HEAD)"
@@ -140,13 +140,14 @@ jobs:
           git pull --ff-only origin main
           mkdir -p certification
           {
-            printf 'schema=rustd-resolved-release-diagnostic-v2\n'
+            printf 'schema=rustd-resolved-release-diagnostic-v3\n'
             printf 'status=failure\n'
             printf 'tested_sha=%s\n' "$GITHUB_SHA"
             printf '%s\n' '--- tail ---'
-            tail -n 360 /tmp/rustd-resolved-release.log || true
+            tail -n 500 /tmp/rustd-resolved-release.log || true
           } > certification/release-closure-diagnostic.txt
           git add certification/release-closure-diagnostic.txt
+          git diff --cached --check
           git config user.name 'Kenny Glowner'
           git config user.email 'SisyphusAeolides@pm.me'
           git commit -m 'Record RustD-Resolved release closure diagnostic'
