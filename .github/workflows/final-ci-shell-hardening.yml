@@ -1,4 +1,5 @@
 name: Final CI shell hardening
+# run now
 
 defaults:
   run:
