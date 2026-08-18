@@ -1,0 +1,265 @@
+name: Retry resolver source cleanup
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/land-source-cleanup-v4.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: land-resolver-source-cleanup-v4
+  cancel-in-progress: true
+
+jobs:
+  clean:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Install native dependencies
+        shell: 'bash --noprofile --norc -euo pipefail {0}'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential gfortran pkg-config libssl-dev liburing-dev python3
+      - name: Apply and verify source corrections
+        id: verify
+        continue-on-error: true
+        shell: 'bash --noprofile --norc -euo pipefail {0}'
+        run: |
+          exec > >(tee /tmp/rustd-resolved-source-cleanup-v4.log) 2>&1
+          git fetch origin main
+          git checkout main
+          git pull --ff-only origin main
+          base_sha="$(git rev-parse HEAD)"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def remove_function(path: str, signature: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              position = text.find(signature)
+              if position < 0:
+                  return
+              start = text.rfind("\n", 0, position) + 1
+              attribute = "    #[cfg(test)]\n"
+              if text[max(0, start - len(attribute)):start] == attribute:
+                  start -= len(attribute)
+              brace = text.find("{", position)
+              if brace < 0:
+                  raise SystemExit(f"opening brace missing for {signature}")
+              depth = 1
+              cursor = brace + 1
+              while cursor < len(text) and depth:
+                  if text[cursor] == "{":
+                      depth += 1
+                  elif text[cursor] == "}":
+                      depth -= 1
+                  cursor += 1
+              if depth:
+                  raise SystemExit(f"unbalanced function body for {signature}")
+              while cursor < len(text) and text[cursor] in " \t\r\n":
+                  cursor += 1
+              file.write_text(text[:start] + text[cursor:])
+
+          pool = Path("src/supremacy/transport_pool.rs")
+          text = pool.read_text()
+          text = text.replace("use std::sync::Arc;\n", "use std::sync::{Arc, Weak};\n", 1)
+
+          struct_start = text.index("pub struct TransportPool {")
+          struct_end = text.index("\n}\n\nimpl TransportPool", struct_start) + 2
+          text = text[:struct_start] + '''pub struct TransportPool {
+              conns: Mutex<HashMap<Endpoint, Vec<PooledConn>>>,
+              endpoint_inflight: Mutex<HashMap<Endpoint, Weak<Semaphore>>>,
+              max_per_ep: usize,
+              idle: Duration,
+              global_inflight: Arc<Semaphore>,
+          }''' + text[struct_end:]
+
+          constructor_start = text.index(
+              "    pub fn new(max_per_ep: usize, max_global: usize) -> Arc<Self> {"
+          )
+          constructor_end = text.index("\n    pub async fn exchange", constructor_start)
+          constructor = '''    pub fn new(max_per_ep: usize, max_global: usize) -> Arc<Self> {
+              let max_per_ep = max_per_ep.max(1);
+              let max_global = max_global.max(1);
+              Arc::new(Self {
+                  conns: Mutex::new(HashMap::new()),
+                  endpoint_inflight: Mutex::new(HashMap::new()),
+                  max_per_ep,
+                  idle: Duration::from_secs(90),
+                  global_inflight: Arc::new(Semaphore::new(max_global)),
+              })
+          }
+
+              fn endpoint_semaphore(&self, endpoint: &Endpoint) -> Arc<Semaphore> {
+              let mut limits = self.endpoint_inflight.lock();
+              if let Some(limit) = limits.get(endpoint).and_then(Weak::upgrade) {
+                  return limit;
+              }
+              let limit = Arc::new(Semaphore::new(self.max_per_ep));
+              limits.insert(endpoint.clone(), Arc::downgrade(&limit));
+              limit
+          }
+          '''
+          text = text[:constructor_start] + constructor + text[constructor_end:]
+
+          permit_start = text.index("        let _permit = self", constructor_start)
+          permit_end = text.index("        let start = Instant::now();", permit_start)
+          permits = '''        let _global_permit = self
+              .global_inflight
+              .clone()
+              .acquire_owned()
+              .await
+              .map_err(|_| PoolErr::Shutdown)?;
+              let _endpoint_permit = self
+              .endpoint_semaphore(ep)
+              .acquire_owned()
+              .await
+              .map_err(|_| PoolErr::Shutdown)?;
+          '''
+          text = text[:permit_start] + permits + text[permit_end:]
+
+          retain = '''        for v in g.values_mut() {
+              v.retain(|c| c.healthy && now.duration_since(c.last_used) < self.idle);
+          }
+          '''
+          replacement = retain + '''        drop(g);
+              self.endpoint_inflight
+              .lock()
+              .retain(|_, limit| limit.strong_count() > 0);
+          '''
+          if retain not in text:
+              raise SystemExit("idle-reap loop missing")
+          text = text.replace(retain, replacement, 1)
+
+          test_marker = "\n#[derive(Debug)]\npub enum PoolErr"
+          tests = '''
+          #[cfg(test)]
+          mod tests {
+              use super::*;
+
+              #[test]
+              fn endpoint_limit_is_shared_and_never_zero() {
+                  let pool = TransportPool::new(0, 0);
+                  let endpoint = Endpoint {
+                      kind: TrKind::Udp,
+                      addr: "127.0.0.1:53".parse().expect("socket address"),
+                      sni: None,
+                      doh_url: None,
+                      ifindex: 0,
+                  };
+                  let first = pool.endpoint_semaphore(&endpoint);
+                  let second = pool.endpoint_semaphore(&endpoint);
+                  assert!(Arc::ptr_eq(&first, &second));
+                  assert_eq!(first.available_permits(), 1);
+                  assert_eq!(pool.global_inflight.available_permits(), 1);
+              }
+          }
+          '''
+          if "endpoint_limit_is_shared_and_never_zero" not in text:
+              if test_marker not in text:
+                  raise SystemExit("transport-pool test insertion point missing")
+              text = text.replace(test_marker, tests + test_marker, 1)
+          pool.write_text(text)
+
+          runtime = Path("src/mdns_runtime.rs")
+          text = runtime.read_text()
+          text = text.replace("#[cfg(test)]\nconst TYPE_TXT: u16 = 16;\n", "", 1)
+          text = text.replace("#[cfg(test)]\nconst TYPE_AAAA: u16 = 28;\n", "", 1)
+          runtime.write_text(text)
+
+          remove_function(
+              "src/resolver_edns.rs",
+              "    fn tls_possible(&self, server: ServerKey, strict: bool) -> bool",
+          )
+          remove_function(
+              "src/varlink.rs",
+              "fn response_flags(response: &[u8]) -> u64",
+          )
+
+          control = Path("src/resolvectl_dbus.rs")
+          text = control.read_text()
+          replacements = (
+              ('print_string_field(&label, &value, "llmnr")', 'print_string_field(label, value, "llmnr")'),
+              ('print_string_field(&label, &value, "mDNS")', 'print_string_field(label, value, "mDNS")'),
+              ('print_string_field(&label, &value, "dnsOverTLS")', 'print_string_field(label, value, "dnsOverTLS")'),
+              ('print_string_field(&label, &value, "dnssec")', 'print_string_field(label, value, "dnssec")'),
+              ('assert_eq!(parse_boolean("yes").unwrap(), true);', 'assert!(parse_boolean("yes").unwrap());'),
+              ('assert_eq!(parse_boolean("t").unwrap(), true);', 'assert!(parse_boolean("t").unwrap());'),
+              ('assert_eq!(parse_boolean("OFF").unwrap(), false);', 'assert!(!parse_boolean("OFF").unwrap());'),
+              ('assert_eq!(parse_boolean("N").unwrap(), false);', 'assert!(!parse_boolean("N").unwrap());'),
+          )
+          for old, new in replacements:
+              if old in text:
+                  text = text.replace(old, new, 1)
+              elif new not in text:
+                  raise SystemExit(f"resolvectl fragment missing: {old}")
+          control.write_text(text)
+          PY
+
+          cargo fmt --all
+          cargo fmt --all -- --check
+          cargo clippy --all-targets --all-features --locked -- -D warnings
+          cargo test --all-targets --all-features --locked
+          make check-native
+          make check-packaging
+          make check-nss
+          make build
+          git diff --check
+
+          mkdir -p certification
+          cat > certification/source-cleanup-latest.txt <<EOF
+          schema=rustd-resolved-source-cleanup-v2
+          status=pass
+          tested_base_sha=$base_sha
+          clippy=pass
+          tests=pass
+          native=pass
+          packaging=pass
+          nss=pass
+          endpoint_limit=implemented
+          endpoint_limit_cleanup=implemented
+          EOF
+          rm -f \
+            .github/workflows/land-source-cleanup-v3.yml \
+            .github/workflows/land-source-cleanup-v4.yml \
+            certification/release-cleanup-latest.txt \
+            certification/release-closure-diagnostic.txt \
+            certification/source-cleanup-diagnostic.txt
+          git add -A
+          git diff --cached --check
+          git config user.name 'Kenny Glowner'
+          git config user.email 'SisyphusAeolides@pm.me'
+          git commit -m 'Clean resolver release source'
+          git pull --rebase origin main
+          cargo fmt --all -- --check
+          git push origin HEAD:main
+      - name: Publish source cleanup failure
+        if: steps.verify.outcome != 'success'
+        shell: 'bash --noprofile --norc -euo pipefail {0}'
+        run: |
+          git reset --hard HEAD
+          git fetch origin main
+          git checkout main
+          git pull --ff-only origin main
+          mkdir -p certification
+          {
+            printf 'schema=rustd-resolved-source-cleanup-diagnostic-v2\n'
+            printf 'status=failure\n'
+            printf 'tested_sha=%s\n' "$GITHUB_SHA"
+            printf '%s\n' '--- tail ---'
+            tail -n 800 /tmp/rustd-resolved-source-cleanup-v4.log || true
+          } > certification/source-cleanup-diagnostic.txt
+          git add certification/source-cleanup-diagnostic.txt
+          git diff --cached --check
+          git config user.name 'Kenny Glowner'
+          git config user.email 'SisyphusAeolides@pm.me'
+          git commit -m 'Record resolver source cleanup diagnostic'
+          git push origin HEAD:main
+          exit 1
