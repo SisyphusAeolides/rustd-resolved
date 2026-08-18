@@ -1,5 +1,0 @@
-schema=rustd-resolved-cleanup-diagnostic-v3
-status=failure
-tested_sha=0c7a307fff92dc8eeede51fa1f4383fc94fb8e13
---- tail ---
-src/supremacy/transport_pool.rs: missing fragment: '    pub fn new(max_per_ep: usize, max_global: usize) -> Arc<Self> {\n    Arc::new(Self {\n        conns: Mutex::new(HashMap::new()),\n        max_per_ep,\n        idle: Duration::from_secs(90),\n        global_inflight: Arc::new(Semaphore::new(max_global)),\n    })\n}'
