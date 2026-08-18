@@ -30,7 +30,9 @@ jobs:
       - name: Run persistent rollover lifecycle
         id: certify
         shell: bash
-        run: cargo +1.74.0 test --locked --test rfc5011_rollover -- --nocapture --test-threads=1
+        run: |
+          set -o pipefail
+          cargo +1.74.0 test --locked --test rfc5011_rollover -- --nocapture --test-threads=1 2>&1 | tee /tmp/rfc5011-rollover.log
       - name: Publish exact-SHA rollover voucher
         if: always()
         shell: bash
@@ -47,7 +49,12 @@ jobs:
           mkdir -p certification
           printf 'schema=rustd-resolved-rfc5011-rollover-v1\nstatus=%s\ntested_sha=%s\ncert_outcome=%s\nrust=1.74.0\npersistence=reopen-every-transition\nrevoke=authenticated-self-signature\n' \
               "$status" "$tested_sha" "$CERT_OUTCOME" > certification/rfc5011-rollover-latest.txt
-          git add certification/rfc5011-rollover-latest.txt
+          if [ "$status" = failure ] && [ -f /tmp/rfc5011-rollover.log ]; then
+              tail -n 120 /tmp/rfc5011-rollover.log > certification/rfc5011-rollover-diagnostic.txt
+          else
+              rm -f certification/rfc5011-rollover-diagnostic.txt
+          fi
+          git add -A certification/rfc5011-rollover-latest.txt certification/rfc5011-rollover-diagnostic.txt
           if git diff --cached --quiet; then
               [ "$status" = pass ]
               exit
