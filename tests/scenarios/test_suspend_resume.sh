@@ -3,15 +3,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-DRIVER="${RUSTD_RESOLVED_LAB_DRIVER:-}"
+DRIVER="${RUSTD_RESOLVED_SUSPEND_RESUME_DRIVER:-$ROOT/scripts/suspend-resume-driver.sh}"
 
-if [[ -z "$DRIVER" || ! -x "$DRIVER" ]]; then
-  printf '%s: no executable lab driver configured; set RUSTD_RESOLVED_LAB_DRIVER\n' "suspend-resume" >&2
+if [[ ! -x "$DRIVER" ]]; then
+  printf 'suspend-resume: lab driver is not executable: %s\n' "$DRIVER" >&2
   exit 77
 fi
 
-exec "$DRIVER" \
-  --scenario "suspend-resume" \
-  --gate "dns.suspend_resume" \
-  --repository "$ROOT" \
-  "$@"
+exec "$DRIVER" "$@"
