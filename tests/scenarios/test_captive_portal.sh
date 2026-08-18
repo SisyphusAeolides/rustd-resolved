@@ -3,15 +3,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-DRIVER="${RUSTD_RESOLVED_LAB_DRIVER:-}"
+DRIVER="${RUSTD_RESOLVED_CAPTIVE_PORTAL_DRIVER:-$ROOT/scripts/captive-portal-driver.py}"
 
-if [[ -z "$DRIVER" || ! -x "$DRIVER" ]]; then
-  printf '%s: no executable lab driver configured; set RUSTD_RESOLVED_LAB_DRIVER\n' "captive-portal" >&2
+if [[ ! -x "$DRIVER" ]]; then
+  printf 'captive-portal: lab driver is not executable: %s\n' "$DRIVER" >&2
   exit 77
 fi
 
-exec "$DRIVER" \
-  --scenario "captive-portal" \
-  --gate "dns.captive_portal" \
-  --repository "$ROOT" \
-  "$@"
+exec "$DRIVER" --repository "$ROOT" "$@"
