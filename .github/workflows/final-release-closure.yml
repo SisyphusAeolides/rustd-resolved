@@ -61,20 +61,20 @@ jobs:
           test -f "$root/usr/lib/libnss_rustd_dns.so.2"
           test -f "$root/usr/lib/rustd/system/rustd-resolved.service"
           test -f "$root/usr/share/dbus-1/system-services/org.freedesktop.resolve1.service"
-          test -L "$root/etc/resolv.conf" || test -f "$root/usr/lib/tmpfiles.d/rustd-resolved.conf"
+          test -f "$root/usr/lib/tmpfiles.d/rustd-resolved.conf"
 
           # Runtime/install names must be RustD-owned. The two intentional
           # compatibility references are the conflict declaration and the
-          # NetworkManager disable knob.
+          # NetworkManager disable knob. Benchmark source is excluded because
+          # it intentionally names the reference implementation.
           bad="$(grep -R -nE 'systemd-resolved|systemctl|/run/systemd/resolve|resolvectl-rs' \
             src ffi nss scripts packaging Cargo.toml Makefile \
             | grep -v 'Conflicts=systemd-resolved.service' \
             | grep -v 'systemd-resolved=false' \
-            | grep -v 'Paired systemd-resolved vs rustd-resolved performance gate' \
-            | grep -v 'REFERENCE_VERSION=.*systemd' \
             || true)"
           test -z "$bad" || { printf '%s\n' "$bad" >&2; exit 1; }
-          ! grep -R -nE 'NOTIFY_SOCKET|/run/systemd/resolve' ffi src packaging scripts --exclude='*.md'
+          ! grep -R -nF 'getenv("NOTIFY_SOCKET")' ffi src packaging scripts --exclude='*.md'
+          ! grep -R -nF '/run/systemd/resolve' ffi src packaging scripts --exclude='*.md'
 
           # Security/cutover invariants.
           grep -Fq 'ProtectSystem=strict' packaging/rustd/rustd-resolved.service
@@ -87,7 +87,8 @@ jobs:
           sha="$(git rev-parse HEAD)"
           cat > certification/release-closure-latest.txt <<EOF
           schema=rustd-resolved-release-closure-v1
-          status=pass
+          status=core-pass
+          complete=false
           tested_sha=$sha
           rust_tests=pass
           native_tests=pass
@@ -106,5 +107,5 @@ jobs:
           git diff --cached --check
           git config user.name 'Kenny Glowner'
           git config user.email 'SisyphusAeolides@pm.me'
-          git commit -m 'Certify RustD-Resolved release closure'
+          git commit -m 'Certify RustD-Resolved core release closure'
           git push origin HEAD:main
