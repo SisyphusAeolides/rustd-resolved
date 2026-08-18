@@ -1,5 +1,5 @@
 name: Include Fedora packaging in resolver release closure
-# trigger with autostash
+# trigger dist + evidence autostash
 
 on:
   push:
@@ -30,6 +30,7 @@ jobs:
               if anchor not in s:
                   raise SystemExit('release path trigger insertion point missing')
               s=s.replace(anchor,addition,1)
+          s=s.replace('          git rebase origin/main\n','          git rebase --autostash origin/main\n')
           p.write_text(s)
           PY
           git diff --check
