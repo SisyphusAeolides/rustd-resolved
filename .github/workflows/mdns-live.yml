@@ -1,5 +1,9 @@
 name: Live RustD mDNS verification
 
+defaults:
+  run:
+    shell: 'bash --noprofile --norc -euo pipefail {0}'
+
 on:
   push:
     branches:
@@ -22,9 +26,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install build and network tools
-        shell: bash
         run: |
-          set -euo pipefail
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
             gfortran iproute2 libssl-dev liburing-dev
@@ -33,15 +35,11 @@ jobs:
         run: cargo build --release --locked --bin rustd-resolved --bin rustd-resolvectl
 
       - name: Exercise real multicast metadata and anti-spoofing
-        shell: bash
         run: python3 tests/live-mdns.py target/release/rustd-resolved
 
       - name: Install external Avahi interoperability tools
-        shell: bash
         run: |
-          set -euo pipefail
           sudo apt-get install --yes --no-install-recommends avahi-daemon avahi-utils dbus
 
       - name: Exercise external Avahi mDNS and DNS-SD interoperability
-        shell: bash
         run: timeout --kill-after=5s 240s bash tests/live-avahi-interop.sh target/release/rustd-resolved target/release/rustd-resolvectl
