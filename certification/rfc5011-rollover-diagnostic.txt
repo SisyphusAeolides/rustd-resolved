@@ -1,26 +1,19 @@
-[1m[32m   Compiling[0m memchr v2.8.3
-[1m[32m   Compiling[0m log v0.4.33
-[1m[32m   Compiling[0m smallvec v1.15.2
-[1m[32m   Compiling[0m io-lifetimes v1.0.11
-[1m[32m   Compiling[0m ppv-lite86 v0.2.21
-[1m[32m   Compiling[0m aho-corasick v1.1.5
-[1m[32m   Compiling[0m event-listener-strategy v0.5.4
 [1m[32m   Compiling[0m enumflags2_derive v0.7.12
 [1m[32m   Compiling[0m getrandom v0.2.17
 [1m[32m   Compiling[0m tracing-core v0.1.36
+[1m[32m   Compiling[0m futures-lite v2.6.1
 [1m[32m   Compiling[0m memoffset v0.7.1
 [1m[32m   Compiling[0m polling v2.8.0
-[1m[32m   Compiling[0m futures-lite v2.6.1
+[1m[32m   Compiling[0m async-task v4.7.1
+[1m[32m   Compiling[0m bitflags v1.3.2
+[1m[32m   Compiling[0m fastrand v1.9.0
+[1m[32m   Compiling[0m slab v0.4.12
 [1m[32m   Compiling[0m tinyvec_macros v0.1.1
-[1m[32m   Compiling[0m parking_lot_core v0.9.12
 [1m[32m   Compiling[0m waker-fn v1.2.0
 [1m[32m   Compiling[0m rustix v0.37.28
-[1m[32m   Compiling[0m regex-syntax v0.8.11
-[1m[32m   Compiling[0m async-task v4.7.1
 [1m[32m   Compiling[0m atomic-waker v1.1.2
-[1m[32m   Compiling[0m bitflags v1.3.2
-[1m[32m   Compiling[0m slab v0.4.12
-[1m[32m   Compiling[0m fastrand v1.9.0
+[1m[32m   Compiling[0m regex-syntax v0.8.11
+[1m[32m   Compiling[0m parking_lot_core v0.9.12
 [1m[32m   Compiling[0m piper v0.2.5
 [1m[32m   Compiling[0m futures-lite v1.13.0
 [1m[32m   Compiling[0m tinyvec v1.12.0
@@ -28,93 +21,100 @@
 [1m[32m   Compiling[0m rand_core v0.6.4
 [1m[32m   Compiling[0m async-channel v2.5.0
 [1m[32m   Compiling[0m async-lock v2.8.0
-[1m[32m   Compiling[0m crypto-common v0.1.7
 [1m[32m   Compiling[0m block-buffer v0.10.4
+[1m[32m   Compiling[0m crypto-common v0.1.7
 [1m[32m   Compiling[0m zvariant_derive v3.15.2
 [1m[32m   Compiling[0m tracing-attributes v0.1.31
-[1m[32m   Compiling[0m async-io v1.13.0
-[1m[32m   Compiling[0m regex-automata v0.4.18
 [1m[32m   Compiling[0m async-fs v1.6.0
+[1m[32m   Compiling[0m async-io v1.13.0
+[1m[32m   Compiling[0m linux-raw-sys v0.3.8
+[1m[32m   Compiling[0m regex-automata v0.4.18
 [1m[32m   Compiling[0m scopeguard v1.2.0
 [1m[32m   Compiling[0m byteorder v1.5.0
 [1m[32m   Compiling[0m static_assertions v1.1.0
-[1m[32m   Compiling[0m linux-raw-sys v0.3.8
 [1m[32m   Compiling[0m tracing v0.1.44
 [1m[32m   Compiling[0m zvariant v3.15.2
-[1m[32m   Compiling[0m regex v1.13.1
 [1m[32m   Compiling[0m lock_api v0.4.14
+[1m[32m   Compiling[0m regex v1.13.1
 [1m[32m   Compiling[0m digest v0.10.7
-[1m[32m   Compiling[0m blocking v1.6.2
-[1m[32m   Compiling[0m rand_core v0.9.5
 [1m[32m   Compiling[0m idna_mapping v1.1.0
+[1m[32m   Compiling[0m rand_core v0.9.5
+[1m[32m   Compiling[0m blocking v1.6.2
 [1m[32m   Compiling[0m rand_chacha v0.3.1
 [1m[32m   Compiling[0m unicode-normalization v0.1.25
 [1m[32m   Compiling[0m socket2 v0.4.10
-[1m[32m   Compiling[0m thiserror v1.0.69
-[1m[32m   Compiling[0m cpufeatures v0.2.17
-[1m[32m   Compiling[0m anyhow v1.0.104
-[1m[32m   Compiling[0m lazy_static v1.5.0
-[1m[32m   Compiling[0m unicode-bidi v0.3.18
-[1m[32m   Compiling[0m futures-sink v0.3.34
 [1m[32m   Compiling[0m futures-task v0.3.34
-[1m[32m   Compiling[0m sharded-slab v0.1.7
-[1m[32m   Compiling[0m futures-util v0.3.34
-[1m[32m   Compiling[0m idna_adapter v1.1.0
+[1m[32m   Compiling[0m thiserror v1.0.69
+[1m[32m   Compiling[0m lazy_static v1.5.0
+[1m[32m   Compiling[0m futures-sink v0.3.34
+[1m[32m   Compiling[0m anyhow v1.0.104
+[1m[32m   Compiling[0m cpufeatures v0.2.17
+[1m[32m   Compiling[0m unicode-bidi v0.3.18
 [1m[32m   Compiling[0m sha1 v0.10.7
-[1m[32m   Compiling[0m parking_lot v0.12.5
-[1m[32m   Compiling[0m nix v0.26.4
-[1m[32m   Compiling[0m rand v0.8.7
-[1m[32m   Compiling[0m rand_chacha v0.9.0
 [1m[32m   Compiling[0m matchers v0.2.0
+[1m[32m   Compiling[0m futures-util v0.3.34
+[1m[32m   Compiling[0m sharded-slab v0.1.7
+[1m[32m   Compiling[0m idna_adapter v1.1.0
+[1m[32m   Compiling[0m parking_lot v0.12.5
 [1m[32m   Compiling[0m zbus_macros v3.15.2 (/home/runner/work/rustd-resolved/rustd-resolved/vendor/zbus_macros-3.15.2)
+[1m[32m   Compiling[0m rand v0.8.7
+[1m[32m   Compiling[0m nix v0.26.4
+[1m[32m   Compiling[0m rand_chacha v0.9.0
 [1m[32m   Compiling[0m zbus_names v2.6.1
 [1m[32m   Compiling[0m async-executor v1.14.0
 [1m[32m   Compiling[0m tracing-log v0.2.0
 [1m[32m   Compiling[0m async-broadcast v0.5.1
 [1m[32m   Compiling[0m derivative v2.2.0
-[1m[32m   Compiling[0m thiserror-impl v1.0.69
 [1m[32m   Compiling[0m async-recursion v1.1.1
-[1m[32m   Compiling[0m async-trait v0.1.92
+[1m[32m   Compiling[0m thiserror-impl v1.0.69
 [1m[32m   Compiling[0m tokio-macros v2.7.2
 [1m[32m   Compiling[0m serde_repr v0.1.21
+[1m[32m   Compiling[0m async-trait v0.1.92
 [1m[32m   Compiling[0m signal-hook-registry v1.4.8
 [1m[32m   Compiling[0m socket2 v0.6.5
-[1m[32m   Compiling[0m mio v1.2.2
 [1m[32m   Compiling[0m xdg-home v1.3.0
+[1m[32m   Compiling[0m mio v1.2.2
 [1m[32m   Compiling[0m ordered-stream v0.2.0
 [1m[32m   Compiling[0m thread_local v1.1.10
 [1m[32m   Compiling[0m utf8_iter v1.0.4
-[1m[32m   Compiling[0m nu-ansi-term v0.50.3
 [1m[32m   Compiling[0m hex v0.4.3
-[1m[32m   Compiling[0m bytes v1.12.1
 [1m[32m   Compiling[0m rustd-resolved v0.2.3 (/home/runner/work/rustd-resolved/rustd-resolved)
-[1m[32m   Compiling[0m tracing-subscriber v0.3.23
+[1m[32m   Compiling[0m nu-ansi-term v0.50.3
+[1m[32m   Compiling[0m bytes v1.12.1
 [1m[32m   Compiling[0m zbus v3.15.2
+[1m[32m   Compiling[0m tracing-subscriber v0.3.23
 [1m[32m   Compiling[0m tokio v1.53.1
-[1m[31merror[0m[1m:[0m failed to run custom build command for `rustd-resolved v0.2.3 (/home/runner/work/rustd-resolved/rustd-resolved)`
+[1m[32m   Compiling[0m idna v1.1.0
+[1m[32m   Compiling[0m rand v0.9.5
+[1m[32m   Compiling[0m bincode v1.3.3
+[1m[32m   Compiling[0m socket2 v0.5.10
+[1m[32m   Compiling[0m memmap2 v0.9.11
+[1m[32m   Compiling[0m crossbeam-queue v0.3.13
+[1m[32m   Compiling[0m seahash v4.1.0
+[1m[32m   Compiling[0m rustix v0.38.44
+[1m[32m   Compiling[0m bitflags v2.13.1
+[1m[32m   Compiling[0m linux-raw-sys v0.4.15
+[1m[32m   Compiling[0m tempfile v3.10.1
+[0m[1m[33mwarning[0m[0m[1m: unused import: `Header`[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0msrc/dbus_core.rs:14:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m14[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0m    Header, TYPE_SRV, TYPE_TXT,[0m
+[0m   [0m[0m[1m[38;5;12m| [0m[0m    [0m[0m[1m[33m^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` on by default[0m
 
-Caused by:
-  process didn't exit successfully: `/home/runner/work/rustd-resolved/rustd-resolved/target/debug/build/rustd-resolved-3187d667cfb8f99d/build-script-build` (exit status: 101)
-  --- stdout
-  cargo:rerun-if-changed=ffi/native.c
-  cargo:rerun-if-changed=ffi/interface.c
-  cargo:rerun-if-changed=ffi/tls.c
-  cargo:rerun-if-changed=ffi/dnssec.c
-  cargo:rerun-if-changed=ffi/netlink.c
-  cargo:rerun-if-changed=ffi/networkd.c
-  cargo:rerun-if-changed=ffi/mdns.c
-  cargo:rerun-if-changed=ffi/llmnr_mcast.c
-  cargo:rerun-if-changed=ffi/native.h
-  cargo:rerun-if-changed=ffi/routing.f90
-  cargo:rerun-if-changed=ffi/iouring_dns.c
-  cargo:rerun-if-changed=ffi/routing_score.f90
+[0m[1m[38;5;9merror[E0433][0m[0m[1m: failed to resolve: use of undeclared crate or module `libc`[0m
+[0m   [0m[0m[1m[38;5;12m--> [0m[0msrc/dnssec_rfc5011_runtime.rs:155:23[0m
+[0m    [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m155[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0m        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)[0m
+[0m    [0m[0m[1m[38;5;12m| [0m[0m                      [0m[0m[1m[38;5;9m^^^^[0m[0m [0m[0m[1m[38;5;9muse of undeclared crate or module `libc`[0m
 
-  --- stderr
-  ffi/iouring_dns.c:13:10: fatal error: liburing.h: No such file or directory
-     13 | #include <liburing.h>
-        |          ^~~~~~~~~~~~
-  compilation terminated.
-  thread 'main' panicked at build.rs:13:5:
-  command "cc" failed with exit status: 1
-  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
-[1m[33mwarning[0m[1m:[0m build failed, waiting for other jobs to finish...
+[0m[1m[38;5;9merror[E0433][0m[0m[1m: failed to resolve: use of undeclared crate or module `libc`[0m
+[0m   [0m[0m[1m[38;5;12m--> [0m[0msrc/dnssec_rfc5011_runtime.rs:155:42[0m
+[0m    [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m155[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0m        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)[0m
+[0m    [0m[0m[1m[38;5;12m| [0m[0m                                         [0m[0m[1m[38;5;9m^^^^[0m[0m [0m[0m[1m[38;5;9muse of undeclared crate or module `libc`[0m
+
+[0m[1mFor more information about this error, try `rustc --explain E0433`.[0m
+[1m[33mwarning[0m[1m:[0m `rustd-resolved` (lib) generated 1 warning
+[1m[31merror[0m[1m:[0m could not compile `rustd-resolved` (lib) due to 2 previous errors; 1 warning emitted
