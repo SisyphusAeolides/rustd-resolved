@@ -78,10 +78,12 @@ make DESTDIR=%{buildroot} \
 %{_prefix}/lib/NetworkManager/conf.d/20-rustd-resolved.conf
 
 %files nss
+%license LICENSE*
 %{_libdir}/libnss_rustd_dns.so.2
 %{_datadir}/rustd-resolved/nsswitch.conf.fragment
 
 %changelog
 * Tue Aug 18 2026 Kenny Glowner <SisyphusAeolides@pm.me> - 0.2.3-1
+- Complete license metadata for the staged NSS subpackage
 - Split the nonconflicting NSS module for fail-closed Fedora cutover staging
 - Add Fedora RustD-Resolved package with io_uring release regressions
