@@ -16,6 +16,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: rfc5011-rollover-certification-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   rollover:
     runs-on: ubuntu-24.04
@@ -47,6 +51,15 @@ jobs:
           git checkout main
           git pull --ff-only origin main
           mkdir -p certification
+          existing_sha=""
+          if [ -f certification/rfc5011-rollover-latest.txt ]; then
+              existing_sha="$(sed -n 's/^tested_sha=//p' certification/rfc5011-rollover-latest.txt | head -n1)"
+          fi
+          if [ -n "$existing_sha" ] && git cat-file -e "$existing_sha^{commit}" 2>/dev/null \
+              && git merge-base --is-ancestor "$tested_sha" "$existing_sha"; then
+              echo "newer RFC5011 voucher already exists for $existing_sha; not overwriting with $tested_sha"
+              exit 0
+          fi
           printf 'schema=rustd-resolved-rfc5011-rollover-v1\nstatus=%s\ntested_sha=%s\ncert_outcome=%s\nrust=1.74.0\npersistence=reopen-every-transition\nrevoke=authenticated-self-signature\n' \
               "$status" "$tested_sha" "$CERT_OUTCOME" > certification/rfc5011-rollover-latest.txt
           if [ "$status" = failure ] && [ -f /tmp/rfc5011-rollover.log ]; then
