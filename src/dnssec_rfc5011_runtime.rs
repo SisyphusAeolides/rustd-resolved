@@ -11,12 +11,19 @@ use crate::dnssec;
 use crate::dnssec_rfc5011::{AnchorId, ObservedDnskey, TrustAnchorManager};
 use crate::wire::{self, ResourceRecord};
 use anyhow::{Context, Result};
+use std::fs::{self, OpenOptions};
+use std::io::Write as _;
+use std::os::unix::fs::OpenOptionsExt as _;
 use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 use std::time::SystemTime;
 
 const DEFAULT_STATE_PATH: &str = "/var/lib/rustd/resolved/rfc5011-trust-anchors.bin";
+const DEFAULT_RUNTIME_ANCHOR_PATH: &str =
+    "/run/dnssec-trust-anchors.d/rustd-rfc5011.positive";
 const DNSKEY_FLAG_REVOKE: u16 = 1 << 7;
+const FAIL_CLOSED_ROOT_DS: &str =
+    ". IN DS 0 253 2 0000000000000000000000000000000000000000000000000000000000000000";
 
 static STATE_IO_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
@@ -55,6 +62,10 @@ fn load_runtime_state_from(path: &Path) -> Result<RuntimeTrustState> {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let manager = manager_for(path)?;
+    Ok(runtime_state(&manager))
+}
+
+fn runtime_state(manager: &TrustAnchorManager) -> RuntimeTrustState {
     let mut valid = manager
         .valid_anchors()
         .into_iter()
@@ -75,7 +86,92 @@ fn load_runtime_state_from(path: &Path) -> Result<RuntimeTrustState> {
     });
     let mut revoked_ids = manager.revoked_anchor_ids();
     revoked_ids.sort();
-    Ok(RuntimeTrustState { valid, revoked_ids })
+    RuntimeTrustState { valid, revoked_ids }
+}
+
+/// Rebuild the volatile positive-anchor file from durable RFC5011 state.
+///
+/// This is called after privilege drop but before resolver workers start. If no
+/// durable RFC5011 database exists yet, the generated file is removed so the
+/// ordinary configured/built-in bootstrap anchors remain authoritative. Once a
+/// durable database exists it becomes authoritative for the managed root trust
+/// point; an empty valid root set publishes a non-matching DS tombstone instead
+/// of silently resurrecting a revoked built-in anchor.
+pub fn publish_runtime_anchors() -> Result<()> {
+    publish_runtime_anchors_from(
+        Path::new(DEFAULT_STATE_PATH),
+        Path::new(DEFAULT_RUNTIME_ANCHOR_PATH),
+    )
+}
+
+fn publish_runtime_anchors_from(state_path: &Path, runtime_path: &Path) -> Result<()> {
+    let _guard = state_lock()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if !state_path.exists() {
+        match fs::remove_file(runtime_path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error).context("removing stale RFC5011 runtime anchors"),
+        }
+        return Ok(());
+    }
+    let manager = manager_for(state_path)?;
+    publish_manager_anchors(&manager, runtime_path)
+}
+
+fn publish_manager_anchors(manager: &TrustAnchorManager, runtime_path: &Path) -> Result<()> {
+    let state = runtime_state(manager);
+    let mut lines = state
+        .valid
+        .iter()
+        .map(|anchor| {
+            format!(
+                "{} IN DNSKEY {} 3 {} {}",
+                anchor.owner,
+                anchor.flags,
+                anchor.algorithm,
+                base64_encode(&anchor.public_key)
+            )
+        })
+        .collect::<Vec<_>>();
+    if !state.valid.iter().any(|anchor| canonical_owner(&anchor.owner) == ".") {
+        lines.push(FAIL_CLOSED_ROOT_DS.to_owned());
+    }
+    lines.sort();
+    lines.dedup();
+
+    let parent = runtime_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("RFC5011 runtime anchor path has no parent"))?;
+    fs::create_dir_all(parent)
+        .with_context(|| format!("creating RFC5011 runtime directory {}", parent.display()))?;
+    let temp_path = runtime_path.with_extension(format!("tmp-{}", std::process::id()));
+    let _ = fs::remove_file(&temp_path);
+    let mut file = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(&temp_path)
+        .with_context(|| format!("creating RFC5011 runtime anchor file {}", temp_path.display()))?;
+    for line in &lines {
+        file.write_all(line.as_bytes())?;
+        file.write_all(b"\n")?;
+    }
+    file.sync_all()?;
+    drop(file);
+    fs::rename(&temp_path, runtime_path).with_context(|| {
+        format!(
+            "publishing RFC5011 runtime anchors {} -> {}",
+            temp_path.display(),
+            runtime_path.display()
+        )
+    })?;
+    if let Ok(directory) = fs::File::open(parent) {
+        directory.sync_all()?;
+    }
+    Ok(())
 }
 
 /// Record a DNSKEY RRset that the resolver has already authenticated through
@@ -92,6 +188,7 @@ pub fn observe_authenticated_dnskey_rrset(
 ) -> Result<bool> {
     observe_authenticated_dnskey_rrset_at(
         Path::new(DEFAULT_STATE_PATH),
+        Path::new(DEFAULT_RUNTIME_ANCHOR_PATH),
         packet,
         dnskey_rrset,
         validating_keys,
@@ -101,6 +198,7 @@ pub fn observe_authenticated_dnskey_rrset(
 
 fn observe_authenticated_dnskey_rrset_at(
     path: &Path,
+    runtime_path: &Path,
     packet: &[u8],
     dnskey_rrset: &[ResourceRecord],
     validating_keys: &[ResourceRecord],
@@ -158,6 +256,9 @@ fn observe_authenticated_dnskey_rrset_at(
             .save_to_disk()
             .with_context(|| format!("persisting RFC5011 state to {}", path.display()))?;
     }
+    // Re-publish even when the state did not change: /run may have been
+    // recreated independently from the durable /var database.
+    publish_manager_anchors(&manager, runtime_path)?;
     Ok(seeded || changed)
 }
 
@@ -237,6 +338,40 @@ fn revoked_key_self_authenticates(
     Ok(false)
 }
 
+fn canonical_owner(owner: &str) -> String {
+    let owner = owner.trim().trim_end_matches('.').to_ascii_lowercase();
+    if owner.is_empty() {
+        ".".to_owned()
+    } else {
+        format!("{owner}.")
+    }
+}
+
+fn base64_encode(input: &[u8]) -> String {
+    const TABLE: &[u8; 64] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut output = String::with_capacity(input.len().div_ceil(3) * 4);
+    for chunk in input.chunks(3) {
+        let first = chunk[0];
+        let second = *chunk.get(1).unwrap_or(&0);
+        let third = *chunk.get(2).unwrap_or(&0);
+        let value = (u32::from(first) << 16) | (u32::from(second) << 8) | u32::from(third);
+        output.push(char::from(TABLE[((value >> 18) & 0x3f) as usize]));
+        output.push(char::from(TABLE[((value >> 12) & 0x3f) as usize]));
+        if chunk.len() > 1 {
+            output.push(char::from(TABLE[((value >> 6) & 0x3f) as usize]));
+        } else {
+            output.push('=');
+        }
+        if chunk.len() > 2 {
+            output.push(char::from(TABLE[(value & 0x3f) as usize]));
+        } else {
+            output.push('=');
+        }
+    }
+    output
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -295,6 +430,7 @@ mod tests {
         let second = dnskey("b.example", 0x0101, 15, &[2; 32]);
         let error = observe_authenticated_dnskey_rrset_at(
             &temporary.path().join("state.bin"),
+            &temporary.path().join("runtime.positive"),
             &[],
             &[first.clone(), second],
             &[first],
@@ -311,6 +447,7 @@ mod tests {
         let validator = dnskey("b.example", 0x0101, 15, &[2; 32]);
         let error = observe_authenticated_dnskey_rrset_at(
             &temporary.path().join("state.bin"),
+            &temporary.path().join("runtime.positive"),
             &[],
             std::slice::from_ref(&rrset),
             &[validator],
@@ -318,5 +455,27 @@ mod tests {
         )
         .unwrap_err();
         assert!(error.to_string().contains("different trust point"));
+    }
+
+    #[test]
+    fn base64_encoder_matches_dns_presentation_format() {
+        assert_eq!(base64_encode(b""), "");
+        assert_eq!(base64_encode(b"f"), "Zg==");
+        assert_eq!(base64_encode(b"fo"), "Zm8=");
+        assert_eq!(base64_encode(b"foo"), "Zm9v");
+    }
+
+    #[test]
+    fn persisted_empty_root_state_publishes_fail_closed_tombstone() {
+        let temporary = tempfile::tempdir().unwrap();
+        let state_path = temporary.path().join("state.bin");
+        let runtime_path = temporary.path().join("runtime.positive");
+        let manager = TrustAnchorManager::with_path(&state_path);
+        manager.save_to_disk().unwrap();
+        publish_runtime_anchors_from(&state_path, &runtime_path).unwrap();
+        assert_eq!(
+            fs::read_to_string(runtime_path).unwrap(),
+            format!("{FAIL_CLOSED_ROOT_DS}\n")
+        );
     }
 }
