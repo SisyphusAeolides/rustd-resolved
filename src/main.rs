@@ -221,6 +221,7 @@ fn run_resolver(
     std::fs::create_dir_all(&config.runtime_directory)?;
     rustd_resolved::log_control::initialize();
     rustd_resolved::native::drop_privileges("rustd-resolve", &config.runtime_directory)?;
+    rustd_resolved::dnssec_rfc5011_runtime::publish_runtime_anchors()?;
     install_signal_handlers()?;
     config.write_runtime_resolv_confs()?;
 
