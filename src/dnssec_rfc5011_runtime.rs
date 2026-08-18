@@ -11,7 +11,7 @@ use crate::dnssec;
 use crate::dnssec_rfc5011::{AnchorId, ObservedDnskey, TrustAnchorManager};
 use crate::wire::{self, ResourceRecord};
 use anyhow::{Context, Result};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 use std::time::SystemTime;
 
@@ -118,6 +118,13 @@ fn observe_authenticated_dnskey_rrset_at(
     }) {
         anyhow::bail!("RFC5011 observation is not one DNSKEY RRset");
     }
+    if validating_keys.iter().any(|record| {
+        record.rr_type != wire::TYPE_DNSKEY
+            || record.class != class
+            || record.name.canonical_wire() != owner
+    }) {
+        anyhow::bail!("RFC5011 validating key belongs to a different trust point");
+    }
 
     let observed = dnskey_rrset
         .iter()
@@ -125,7 +132,7 @@ fn observe_authenticated_dnskey_rrset_at(
         .collect::<Result<Vec<_>>>()?;
     let validators = validating_keys
         .iter()
-        .map(|record| observed_dnskey_without_revocation(record))
+        .map(observed_dnskey_without_revocation)
         .collect::<Result<Vec<_>>>()?;
 
     let _guard = state_lock()
@@ -133,10 +140,12 @@ fn observe_authenticated_dnskey_rrset_at(
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let mut manager = manager_for(path)?;
     let mut validator_ids = Vec::with_capacity(validators.len());
+    let mut seeded = false;
     for validator in &validators {
         let id = validator.anchor_id();
         if manager.entry(&id).is_none() {
             manager.seed_valid_anchor(validator, now);
+            seeded = true;
         }
         validator_ids.push(id);
     }
@@ -144,12 +153,12 @@ fn observe_authenticated_dnskey_rrset_at(
     validator_ids.dedup();
 
     let changed = manager.observe_validated_rrset(&observed, &validator_ids, now);
-    if changed {
+    if seeded || changed {
         manager
             .save_to_disk()
             .with_context(|| format!("persisting RFC5011 state to {}", path.display()))?;
     }
-    Ok(changed)
+    Ok(seeded || changed)
 }
 
 fn observed_dnskey_without_revocation(record: &ResourceRecord) -> Result<ObservedDnskey> {
@@ -162,7 +171,7 @@ fn observed_dnskey_without_revocation(record: &ResourceRecord) -> Result<Observe
         flags: parsed.flags,
         algorithm: parsed.algorithm,
         key_tag: wire::dnskey_key_tag(record)?,
-        public_key: parsed.public_key.to_vec(),
+        public_key: parsed.public_key,
         original_ttl: record.ttl,
         authenticated_self_revocation: false,
     })
@@ -293,5 +302,21 @@ mod tests {
         )
         .unwrap_err();
         assert!(error.to_string().contains("not one DNSKEY RRset"));
+    }
+
+    #[test]
+    fn rejects_validator_from_other_trust_point() {
+        let temporary = tempfile::tempdir().unwrap();
+        let rrset = dnskey("a.example", 0x0101, 15, &[1; 32]);
+        let validator = dnskey("b.example", 0x0101, 15, &[2; 32]);
+        let error = observe_authenticated_dnskey_rrset_at(
+            &temporary.path().join("state.bin"),
+            &[],
+            std::slice::from_ref(&rrset),
+            &[validator],
+            UNIX_EPOCH,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("different trust point"));
     }
 }
