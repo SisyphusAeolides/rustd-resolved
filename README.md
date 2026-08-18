@@ -17,7 +17,7 @@ The native resolver contract is:
 - native NSS resolver socket: `/run/rustd/resolve/io.rustd.Resolve`;
 - RustD-specific NSS controls: `RUSTD_NSS_DNS_*`.
 
-The shared resolver dispatcher now uses `io.rustd.*` canonically. Native requests remain native through the core. Only `io.rustd.*` Varlink identifiers are accepted; no namespace translation is performed.
+The shared resolver dispatcher uses `io.rustd.*` canonically. Native requests remain native through the core. Only `io.rustd.*` Varlink identifiers are accepted; no namespace translation is performed.
 
 ## Installation surface
 
@@ -51,6 +51,18 @@ The implementation includes:
 
 These are RustD resolver capabilities, not an upstream parity score.
 
+## Production feature boundary
+
+The production Cargo feature set is deliberately smaller than the research
+surface. `tests/release_feature_boundary.sh` requires the default feature set to
+be exactly `fortran-routing` plus `idna-name` and rejects `supremacy` or `hyper`
+from replacement-certification artifacts.
+
+Experimental features must still compile cleanly in the all-features CI matrix,
+but incomplete research-only transports are not silently promoted into the
+Fedora production resolver. Moving an experimental feature into the default set
+requires its own runtime and failure-mode certification first.
+
 ## Build and verification
 
 Rust 1.74 is the minimum supported Rust version. The normal production matrix also tests current stable Rust.
@@ -60,7 +72,7 @@ make check-native
 make check-packaging
 make check-nss
 cargo fmt --all -- --check
-cargo clippy --all-targets --all-features --locked
+cargo clippy --all-targets --all-features --locked -- -D warnings
 cargo test --all-targets --all-features --locked
 cargo build --release --locked
 python3 tests/live-dns.py \
@@ -97,6 +109,32 @@ Compatibility adapters are allowed only at explicit external boundaries. They mu
 
 The `org.freedesktop.resolve1` endpoint is such a boundary: it exists for third-party clients that speak the established D-Bus ABI, while resolver execution, RustD Varlink, NSS, configuration, packaging, service ownership, and runtime state remain native RustD interfaces.
 
+## Fedora zero-systemd integration
+
+Fedora 44 is the current integrated cutover certification target together with
+the `rustd` repository. RustD pins an exact RustD-Resolved commit in
+`scripts/rustd-resolved-revision.txt`; Fedora RPM artifacts are built from that
+immutable source pair before the destructive VM conversion.
+
+The resolver side of a successful Fedora certificate requires:
+
+- the `rustd-resolved` RPM to conflict with and replace the Fedora resolver
+  package rather than coexisting as an untested second resolver;
+- `libnss_rustd_dns.so.2` to service the active authselect-generated hosts NSS
+  path after removed NSS backends are deleted;
+- `/etc/resolv.conf` and the stub resolver runtime to resolve under
+  `/run/rustd/resolve`;
+- `rustd-resolved.service` to start under RustD PID 1 and remain active after
+  repeated cold boots;
+- `getent` name resolution, `rustd-resolvectl status`, NetworkManager, and DNF
+  metadata refresh to continue working after every `systemd*` RPM has been
+  removed;
+- no old resolver executable or runtime tree to survive in the certified
+  filesystem or rebuilt initramfs.
+
+A resolver source-tree pass is necessary but not sufficient for that claim. The
+paired RustD Fedora full-VM certificate is the installed-system authority.
+
 ## Production-release boundary
 
 A resolver release is not judged by source CI alone. Before labeling a candidate production-ready on a machine's only resolver path, it must also pass installed-system campaigns that exercise sustained query load, upstream and interface changes, DNSSEC/DNS-over-TLS policy, reload/restart/watchdog/shutdown, crash recovery, malformed input, resource pressure, bounded memory, NSS behavior, privilege dropping, RustD-managed boot, and long-running soak/fault tests.
@@ -105,7 +143,11 @@ The source/build baseline is intentionally strict so those installed-system camp
 
 ## Supported platform
 
-Arch Linux and compatible Arch-based distributions are the initial supported release and maintenance targets. The intended RustD stack does not require a host installation of another init system.
+Fedora 44 is the current zero-systemd installed-system certification target.
+Arch Linux and compatible Arch-based distributions remain supported build and
+native-install targets. Neither platform is considered production-certified
+merely because the source compiles; the corresponding installed-system gates
+must pass for the exact release candidate.
 
 ## License
 
