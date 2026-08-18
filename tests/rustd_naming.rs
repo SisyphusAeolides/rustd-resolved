@@ -72,7 +72,8 @@ fn native_nss_contract_uses_rustd_dns_service() {
 
     assert!(makefile.contains("libnss_rustd_dns.so.2"));
     assert!(symbols.contains("_nss_rustd_dns_gethostbyname4_r"));
-    assert!(nsswitch.contains("hosts: files myhostname rustd_dns"));
+    assert!(nsswitch.contains("hosts: files rustd_dns [!UNAVAIL=return] dns"));
+    assert!(!nsswitch.contains("myhostname"));
     assert!(!nsswitch.contains(" hosts: resolve"));
 }
 
