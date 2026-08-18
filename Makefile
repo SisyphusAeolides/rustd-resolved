@@ -75,9 +75,11 @@ check-packaging:
 	grep -Fq 'After=rustd-sysusers.service network-pre.target' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'ExecStart=/usr/lib/rustd/rustd-resolved --dbus' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'Conflicts=systemd-resolved.service' packaging/rustd/rustd-resolved.service; \
-	grep -Fq 'ProtectSystem=strict' packaging/rustd/rustd-resolved.service; \
+	grep -Fq 'ProtectSystem=full' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'ReadWritePaths=/run/rustd /var/lib/rustd/resolved' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'd /var/lib/rustd/resolved 0750 rustd-resolve rustd-resolve -' packaging/tmpfiles/rustd-resolved.conf; \
+	grep -Fq 'drop_privileges("rustd-resolve", &config.runtime_directory)' src/main.rs; \
+	grep -Fq '(UINT64_C(1) << CAP_NET_BIND_SERVICE) | (UINT64_C(1) << CAP_NET_RAW)' ffi/native.c; \
 	test -f packaging/NetworkManager/conf.d/20-rustd-resolved.conf; \
 	grep -Fq 'dns=none' packaging/NetworkManager/conf.d/20-rustd-resolved.conf; \
 	grep -Fq 'rc-manager=unmanaged' packaging/NetworkManager/conf.d/20-rustd-resolved.conf; \
