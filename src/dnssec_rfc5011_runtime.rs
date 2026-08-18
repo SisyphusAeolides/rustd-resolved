@@ -22,6 +22,9 @@ const DEFAULT_STATE_PATH: &str = "/var/lib/rustd/resolved/rfc5011-trust-anchors.
 const DEFAULT_RUNTIME_ANCHOR_PATH: &str =
     "/run/dnssec-trust-anchors.d/rustd-rfc5011.positive";
 const DNSKEY_FLAG_REVOKE: u16 = 1 << 7;
+// Linux open(2) flags; keep the RFC5011 state publication dependency-free.
+const O_NOFOLLOW: i32 = 0o400000;
+const O_CLOEXEC: i32 = 0o2000000;
 const FAIL_CLOSED_ROOT_DS: &str =
     ". IN DS 0 253 2 0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -152,7 +155,7 @@ fn publish_manager_anchors(manager: &TrustAnchorManager, runtime_path: &Path) ->
         .create_new(true)
         .write(true)
         .mode(0o600)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .custom_flags(O_NOFOLLOW | O_CLOEXEC)
         .open(&temp_path)
         .with_context(|| format!("creating RFC5011 runtime anchor file {}", temp_path.display()))?;
     for line in &lines {
