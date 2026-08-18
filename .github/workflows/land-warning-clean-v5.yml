@@ -11,12 +11,12 @@ permissions:
 
 concurrency:
   group: land-resolver-warning-clean-v5
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   clean:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -40,6 +40,16 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              if old in text:
+                  if text.count(old) != 1:
+                      raise SystemExit(f"expected one source fragment in {path}: {old!r}")
+                  file.write_text(text.replace(old, new, 1))
+              elif new and new not in text:
+                  raise SystemExit(f"source fragment missing in {path}: {old!r}")
+
           def remove_function(path: str, signature: str) -> None:
               file = Path(path)
               text = file.read_text()
@@ -47,6 +57,14 @@ jobs:
               if position < 0:
                   return
               start = text.rfind("\n", 0, position) + 1
+              while start > 0:
+                  previous_end = start - 1
+                  previous_start = text.rfind("\n", 0, previous_end) + 1
+                  previous = text[previous_start:previous_end].strip()
+                  if previous.startswith("#[") and previous.endswith("]"):
+                      start = previous_start
+                  else:
+                      break
               brace = text.find("{", position)
               if brace < 0:
                   raise SystemExit(f"opening brace missing for {signature}")
@@ -64,17 +82,16 @@ jobs:
                   cursor += 1
               file.write_text(text[:start] + text[cursor:])
 
-          runtime = Path("src/mdns_runtime.rs")
-          text = runtime.read_text()
-          for line in (
-              "const TYPE_TXT: u16 = 16;\n",
-              "const TYPE_AAAA: u16 = 28;\n",
+          replace_once(
+              "src/mdns_runtime.rs",
               "#[cfg(test)]\nconst TYPE_TXT: u16 = 16;\n",
+              "",
+          )
+          replace_once(
+              "src/mdns_runtime.rs",
               "#[cfg(test)]\nconst TYPE_AAAA: u16 = 28;\n",
-          ):
-              text = text.replace(line, "", 1)
-          runtime.write_text(text)
-
+              "",
+          )
           remove_function(
               "src/resolver_edns.rs",
               "    fn tls_possible(&self, server: ServerKey, strict: bool) -> bool",
@@ -84,8 +101,6 @@ jobs:
               "fn response_flags(response: &[u8]) -> u64",
           )
 
-          control = Path("src/resolvectl_dbus.rs")
-          text = control.read_text()
           replacements = (
               ('print_string_field(&label, &value, "llmnr")', 'print_string_field(label, value, "llmnr")'),
               ('print_string_field(&label, &value, "mDNS")', 'print_string_field(label, value, "mDNS")'),
@@ -97,11 +112,7 @@ jobs:
               ('assert_eq!(parse_boolean("N").unwrap(), false);', 'assert!(!parse_boolean("N").unwrap());'),
           )
           for old, new in replacements:
-              if old in text:
-                  text = text.replace(old, new, 1)
-              elif new not in text:
-                  raise SystemExit(f"source fragment missing: {old}")
-          control.write_text(text)
+              replace_once("src/resolvectl_dbus.rs", old, new)
           PY
           cargo fmt --all
           cargo fmt --all -- --check
@@ -114,7 +125,7 @@ jobs:
           git diff --check
           mkdir -p certification
           cat > certification/source-cleanup-latest.txt <<EOF
-          schema=rustd-resolved-source-cleanup-v3
+          schema=rustd-resolved-source-cleanup-v4
           status=pass
           tested_base_sha=$base_sha
           clippy=pass
@@ -123,6 +134,7 @@ jobs:
           packaging=pass
           nss=pass
           endpoint_limit=implemented
+          production_cfg=pass
           EOF
           rm -f \
             .github/workflows/land-source-cleanup-v3.yml \
@@ -148,7 +160,7 @@ jobs:
           git pull --ff-only origin main
           mkdir -p certification
           {
-            printf 'schema=rustd-resolved-warning-clean-diagnostic-v1\n'
+            printf 'schema=rustd-resolved-warning-clean-diagnostic-v2\n'
             printf 'status=failure\n'
             printf 'tested_sha=%s\n' "$GITHUB_SHA"
             printf '%s\n' '--- tail ---'
