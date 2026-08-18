@@ -1,0 +1,48 @@
+name: Scenario integration wrapper contract
+
+defaults:
+  run:
+    shell: 'bash --noprofile --norc -euo pipefail {0}'
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - tests/scenarios/test_*.sh
+      - scripts/network-lab-driver.py
+      - scripts/captive-portal-driver.py
+      - scripts/failover-churn-driver.py
+      - scripts/vpn-split-dns-driver.py
+      - scripts/suspend-resume-driver.sh
+      - .github/workflows/scenario-wrapper-contract.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Verify first-party scenario wiring
+        run: |
+          bash -n \
+            tests/scenarios/test_network_churn.sh \
+            tests/scenarios/test_captive_portal.sh \
+            tests/scenarios/test_failover_churn.sh \
+            tests/scenarios/test_vpn_split_dns.sh \
+            tests/scenarios/test_suspend_resume.sh \
+            scripts/suspend-resume-driver.sh
+          python3 -m py_compile \
+            scripts/network-lab-driver.py \
+            scripts/captive-portal-driver.py \
+            scripts/failover-churn-driver.py \
+            scripts/vpn-split-dns-driver.py
+          tests/scenarios/test_network_churn.sh --help >/dev/null
+          tests/scenarios/test_captive_portal.sh --help >/dev/null
+          tests/scenarios/test_failover_churn.sh --help >/dev/null
+          tests/scenarios/test_vpn_split_dns.sh --help >/dev/null
+          tests/scenarios/test_suspend_resume.sh --help >/dev/null
