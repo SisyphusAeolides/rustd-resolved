@@ -1,4 +1,5 @@
 name: Include Fedora packaging in resolver release closure
+# trigger
 
 on:
   push:
