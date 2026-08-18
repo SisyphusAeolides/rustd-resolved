@@ -1,6 +1,7 @@
 schema=rustd-resolved-rfc5011-rollover-v1
 status=failure
-tested_sha=5d7d08ed07d78fd349e7deb4526aaaf841ed8047
+tested_sha=a97cbfdf77516bb7c41a2e85d05450bc0df9edf0
 cert_outcome=failure
+rust=1.74.0
 persistence=reopen-every-transition
 revoke=authenticated-self-signature
