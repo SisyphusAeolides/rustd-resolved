@@ -1,11 +1,11 @@
 name: Run strict RustD-Resolved cleanup transaction
-# rerun against the staged Fedora NSS package head on 2026-08-18
 
 on:
   push:
     branches: [main]
     paths:
       - .github/workflows/run-release-cleanup.yml
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -17,7 +17,7 @@ concurrency:
 jobs:
   clean:
     runs-on: ubuntu-24.04
-    timeout-minutes: 50
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -27,32 +27,237 @@ jobs:
         shell: 'bash --noprofile --norc -euo pipefail {0}'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          sudo apt-get install --yes --no-install-recommends \
             build-essential gfortran pkg-config libssl-dev liburing-dev python3
 
-      - name: Execute cleanup recipe and full verification
+      - name: Apply release fixes and verify the full tree
         id: cleanup
         continue-on-error: true
         shell: 'bash --noprofile --norc -euo pipefail {0}'
         run: |
-          exec > >(tee /tmp/rustd-resolved-cleanup-runner.log) 2>&1
+          exec > >(tee /tmp/rustd-resolved-cleanup.log) 2>&1
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
-          text = Path('.github/workflows/land-release-cleanup.yml').read_text()
-          step = text.index('      - name: Apply warning-clean release fixes\n')
-          marker = '        run: |\n'
-          start = text.index(marker, step) + len(marker)
-          end = text.index('      - name: Publish cleanup failure diagnostic\n', start)
-          raw = text[start:end]
-          lines = []
-          for line in raw.splitlines():
-              if line.startswith('          '):
-                  line = line[10:]
-              lines.append(line)
-          Path('/tmp/rustd-resolved-cleanup.sh').write_text('\n'.join(lines) + '\n')
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              if old in text:
+                  file.write_text(text.replace(old, new, 1))
+                  return
+              if new in text:
+                  return
+              raise SystemExit(f"{path}: expected source fragment is missing: {old!r}")
+
+          def cfg_test(path: str, signature: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              pos = text.find(signature)
+              if pos < 0:
+                  raise SystemExit(f"{path}: signature is missing: {signature}")
+              line_start = text.rfind("\n", 0, pos) + 1
+              indent = text[line_start:pos]
+              marker = f"{indent}#[cfg(test)]\n"
+              if text[max(0, line_start - len(marker)):line_start] == marker:
+                  return
+              file.write_text(text[:line_start] + marker + text[line_start:])
+
+          replace_once(
+              "src/dbus_core.rs",
+              "    Header, TYPE_SRV, TYPE_TXT,\n",
+              "    TYPE_SRV, TYPE_TXT,\n",
+          )
+          replace_once(
+              "src/query_cancel.rs",
+              "    // Rust 1.74's const thread-local expansion conflicts with the crate-level\n"
+              "    // `forbid(unsafe_op_in_unsafe_fn)`. Preserve the MSRV-safe initializer.\n"
+              "    #[allow(clippy::missing_const_for_thread_local)]\n",
+              "    // Keep the non-const initializer compatible with the Rust 1.74 build contract.\n",
+          )
+
+          cfg_test("src/dbus_helpers.rs", "fn response_flags(response: &[u8]) -> u64 {")
+          cfg_test("src/hook.rs", "fn read_frame(stream: &mut UnixStream) -> io::Result<Vec<u8>> {")
+          cfg_test(
+              "src/resolver_edns.rs",
+              "fn tls_possible(&self, server: ServerKey, strict: bool) -> bool {",
+          )
+          cfg_test("src/varlink.rs", "fn response_flags(response: &[u8]) -> u64 {")
+
+          responder = Path("src/mdns_responder.rs")
+          text = responder.read_text()
+          old_struct = """struct ParsedMessage {
+              id: u16,
+              flags: u16,
+              questions: Vec<ParsedQuestion>,
+              records: Vec<ParsedRecord>,
+          }"""
+          new_struct = """struct ParsedMessage {
+              id: u16,
+              questions: Vec<ParsedQuestion>,
+              records: Vec<ParsedRecord>,
+          }"""
+          if old_struct in text:
+              text = text.replace(old_struct, new_struct, 1)
+              text = text.replace("    let flags = read_u16(packet, 2)?;\n", "", 1)
+              text = text.replace(
+                  """    Ok(ParsedMessage {
+                  id,
+                  flags,
+                  questions: parsed_questions,""",
+                  """    Ok(ParsedMessage {
+                  id,
+                  questions: parsed_questions,""",
+                  1,
+              )
+          elif new_struct not in text:
+              raise SystemExit("src/mdns_responder.rs: ParsedMessage layout is unexpected")
+          responder.write_text(text)
+
+          runtime = Path("src/mdns_runtime.rs")
+          text = runtime.read_text()
+          for declaration in (
+              "const TYPE_A: u16 = 1;",
+              "const TYPE_TXT: u16 = 16;",
+              "const TYPE_AAAA: u16 = 28;",
+          ):
+              marker = f"#[cfg(test)]\n{declaration}"
+              if marker not in text:
+                  if declaration not in text:
+                      raise SystemExit(f"src/mdns_runtime.rs: missing {declaration}")
+                  text = text.replace(declaration, marker, 1)
+          text = text.replace(
+              """struct RuntimeInterface {
+              interface: MdnsInterface,
+              address: IpAddr,
+          }""",
+              """struct RuntimeInterface {
+              interface: MdnsInterface,
+          }""",
+              1,
+          )
+          pattern = re.compile(
+              r"        let \(family, address\) = match entry\.family \{.*?        \};\n"
+              r"        output\.push\(RuntimeInterface \{\n"
+              r"            interface: MdnsInterface::new\(entry\.ifindex, family\),\n"
+              r"            address,\n"
+              r"        \}\);",
+              re.S,
+          )
+          replacement = """        let family = match entry.family {
+              AF_INET => MdnsAddressFamily::Ipv4,
+              AF_INET6 => MdnsAddressFamily::Ipv6,
+              _ => continue,
+          };
+          output.push(RuntimeInterface {
+              interface: MdnsInterface::new(entry.ifindex, family),
+          });"""
+          text, count = pattern.subn(replacement, text, count=1)
+          if count == 0 and "address: IpAddr" in text:
+              raise SystemExit("src/mdns_runtime.rs: interface conversion was not updated")
+          runtime.write_text(text)
+
+          pool = Path("src/supremacy/transport_pool.rs")
+          text = pool.read_text()
+          replace = {
+              """pub struct TransportPool {
+              conns: Mutex<HashMap<Endpoint, Vec<PooledConn>>>,
+              max_per_ep: usize,
+              idle: Duration,
+              global_inflight: Arc<Semaphore>,
+          }""": """pub struct TransportPool {
+              conns: Mutex<HashMap<Endpoint, Vec<PooledConn>>>,
+              endpoint_inflight: Mutex<HashMap<Endpoint, Arc<Semaphore>>>,
+              max_per_ep: usize,
+              idle: Duration,
+              global_inflight: Arc<Semaphore>,
+          }""",
+              """    pub fn new(max_per_ep: usize, max_global: usize) -> Arc<Self> {
+              Arc::new(Self {
+                  conns: Mutex::new(HashMap::new()),
+                  max_per_ep,
+                  idle: Duration::from_secs(90),
+                  global_inflight: Arc::new(Semaphore::new(max_global)),
+              })
+          }""": """    pub fn new(max_per_ep: usize, max_global: usize) -> Arc<Self> {
+              let max_per_ep = max_per_ep.max(1);
+              let max_global = max_global.max(1);
+              Arc::new(Self {
+                  conns: Mutex::new(HashMap::new()),
+                  endpoint_inflight: Mutex::new(HashMap::new()),
+                  max_per_ep,
+                  idle: Duration::from_secs(90),
+                  global_inflight: Arc::new(Semaphore::new(max_global)),
+              })
+          }""",
+              """    ) -> Result<(Bytes, Duration), PoolErr> {
+              let _permit = self
+                  .global_inflight
+                  .clone()
+                  .acquire_owned()
+                  .await
+                  .map_err(|_| PoolErr::Shutdown)?;""": """    ) -> Result<(Bytes, Duration), PoolErr> {
+              let endpoint_limit = {
+                  let mut limits = self.endpoint_inflight.lock();
+                  limits
+                      .entry(ep.clone())
+                      .or_insert_with(|| Arc::new(Semaphore::new(self.max_per_ep)))
+                      .clone()
+              };
+              let _endpoint_permit = endpoint_limit
+                  .acquire_owned()
+                  .await
+                  .map_err(|_| PoolErr::Shutdown)?;
+              let _global_permit = self
+                  .global_inflight
+                  .clone()
+                  .acquire_owned()
+                  .await
+                  .map_err(|_| PoolErr::Shutdown)?;""",
+          }
+          for old, new in replace.items():
+              if old in text:
+                  text = text.replace(old, new, 1)
+              elif new not in text:
+                  raise SystemExit(f"src/supremacy/transport_pool.rs: missing fragment: {old!r}")
+          pool.write_text(text)
+
+          control = Path("src/resolvectl_dbus.rs")
+          text = control.read_text()
+          for old, new in (
+              ('print_string_field(&label, &value, "llmnr")', 'print_string_field(label, value, "llmnr")'),
+              ('print_string_field(&label, &value, "mDNS")', 'print_string_field(label, value, "mDNS")'),
+              ('print_string_field(&label, &value, "dnsOverTLS")', 'print_string_field(label, value, "dnsOverTLS")'),
+              ('print_string_field(&label, &value, "dnssec")', 'print_string_field(label, value, "dnssec")'),
+              ('assert_eq!(parse_boolean("yes").unwrap(), true);', 'assert!(parse_boolean("yes").unwrap());'),
+              ('assert_eq!(parse_boolean("t").unwrap(), true);', 'assert!(parse_boolean("t").unwrap());'),
+              ('assert_eq!(parse_boolean("OFF").unwrap(), false);', 'assert!(!parse_boolean("OFF").unwrap());'),
+              ('assert_eq!(parse_boolean("N").unwrap(), false);', 'assert!(!parse_boolean("N").unwrap());'),
+          ):
+              if old in text:
+                  text = text.replace(old, new, 1)
+              elif new not in text:
+                  raise SystemExit(f"src/resolvectl_dbus.rs: missing fragment: {old}")
+          control.write_text(text)
+
+          for path in ("Makefile", ".github/workflows/final-release-closure.yml"):
+              file = Path(path)
+              text = file.read_text()
+              text = text.replace(
+                  "hosts: files myhostname rustd_dns [!UNAVAIL=return] dns",
+                  "hosts: files rustd_dns [!UNAVAIL=return] dns",
+              )
+              file.write_text(text)
           PY
-          bash /tmp/rustd-resolved-cleanup.sh
+
+          cargo fmt --all
+          cargo fmt --all -- --check
+          cargo clippy --all-targets --all-features --locked -- -D warnings
+          cargo test --all-targets --all-features --locked
+          make check-native
+          make check-packaging
+          make check-nss
+          git diff --check
 
       - name: Publish failure diagnostic
         if: steps.cleanup.outcome != 'success'
@@ -64,17 +269,17 @@ jobs:
           git pull --ff-only origin main
           mkdir -p certification
           {
-            printf 'schema=rustd-resolved-cleanup-diagnostic-v2\n'
+            printf 'schema=rustd-resolved-cleanup-diagnostic-v3\n'
             printf 'status=failure\n'
             printf 'tested_sha=%s\n' "$GITHUB_SHA"
             printf '%s\n' '--- tail ---'
-            tail -n 360 /tmp/rustd-resolved-cleanup-runner.log || true
+            tail -n 500 /tmp/rustd-resolved-cleanup.log || true
           } > certification/release-cleanup-diagnostic.txt
           git add certification/release-cleanup-diagnostic.txt
           git diff --cached --check
           git config user.name 'Kenny Glowner'
           git config user.email 'SisyphusAeolides@pm.me'
-          git commit -m 'Record strict resolver cleanup diagnostic'
+          git commit -m 'Record resolver cleanup diagnostic' || exit 0
           git push origin HEAD:main
           exit 1
 
@@ -82,6 +287,18 @@ jobs:
         if: steps.cleanup.outcome == 'success'
         shell: 'bash --noprofile --norc -euo pipefail {0}'
         run: |
+          mkdir -p certification
+          {
+            printf 'schema=rustd-resolved-cleanup-v1\n'
+            printf 'status=pass\n'
+            printf 'tested_base_sha=%s\n' "$GITHUB_SHA"
+            printf 'clippy=pass\n'
+            printf 'tests=pass\n'
+            printf 'native=pass\n'
+            printf 'packaging=pass\n'
+            printf 'nss=pass\n'
+            printf 'endpoint_concurrency=bounded\n'
+          } > certification/release-cleanup-latest.txt
           rm -f \
             .github/workflows/land-release-cleanup.yml \
             .github/workflows/run-release-cleanup.yml \
