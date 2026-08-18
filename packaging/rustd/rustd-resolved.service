@@ -13,7 +13,12 @@ Restart=on-failure
 RestartSec=1s
 LimitNOFILE=524288
 NoNewPrivileges=yes
-ProtectSystem=strict
+# RustD does not yet realize ReadWritePaths= exceptions after ProtectSystem=strict
+# remounts the service namespace read-only. Keep system trees protected while
+# leaving /var available to normal DAC so RFC5011 state can be persisted in the
+# rustd-resolve-owned 0750 /var/lib/rustd/resolved directory. Return this to
+# ProtectSystem=strict when RustD's native ReadWritePaths= execution path lands.
+ProtectSystem=full
 ProtectHome=yes
 PrivateTmp=yes
 ProtectKernelTunables=yes
