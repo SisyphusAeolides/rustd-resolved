@@ -1,0 +1,171 @@
+schema=rustd-resolved-release-diagnostic-v1
+status=failure
+tested_sha=4526575599fb3f617342178e9d45ba850721ee47
+--- tail ---
+info: syncing channel updates for 1.74.0-x86_64-unknown-linux-gnu
+info: latest update on 2023-11-16 for version 1.74.0 (79e9716c9 2023-11-13)
+info: downloading 5 components
+Diff in /home/runner/work/rustd-resolved/rustd-resolved/src/dnssec_rfc5011.rs at line 276:
+                     }
+                 }
+                 TrustAnchorState::Valid | TrustAnchorState::Missing => match present {
+-                    Some(key)
+-                        if key.is_revoked() && key.authenticated_self_revocation =>
+-                    {
++                    Some(key) if key.is_revoked() && key.authenticated_self_revocation => {
+                         if let Some(entry) = self.anchors.get_mut(&id) {
+                             entry.state = TrustAnchorState::Revoked;
+                             entry.flags |= REVOKE_FLAG;
+Diff in /home/runner/work/rustd-resolved/rustd-resolved/src/dnssec_rfc5011.rs at line 398:
+         self.anchors
+             .values()
+             .filter(|entry| {
+-                matches!(entry.state, TrustAnchorState::Valid | TrustAnchorState::Missing)
++                matches!(
++                    entry.state,
++                    TrustAnchorState::Valid | TrustAnchorState::Missing
++                )
+             })
+             .collect()
+     }
+Diff in /home/runner/work/rustd-resolved/rustd-resolved/src/dnssec_rfc5011.rs at line 465:
+     }
+ 
+     fn manager(path: &Path) -> TrustAnchorManager {
+-        TrustAnchorManager::with_parameters(
+-            path,
+-            Duration::from_secs(10),
+-            Duration::from_secs(10),
+-        )
++        TrustAnchorManager::with_parameters(path, Duration::from_secs(10), Duration::from_secs(10))
+     }
+ 
+     #[test]
+Diff in /home/runner/work/rustd-resolved/rustd-resolved/src/dnssec_rfc5011.rs at line 656:
+         let root_id = manager.seed_valid_anchor(&root, start);
+         let candidate = key(200, ZONE_FLAG | SEP_FLAG, 30);
+         let id = candidate.anchor_id();
+-        manager.observe_validated_rrset(
+-            &[root, candidate],
+-            std::slice::from_ref(&root_id),
+-            start,
+-        );
++        manager.observe_validated_rrset(&[root, candidate], std::slice::from_ref(&root_id), start);
+         assert_eq!(
+             manager.entry(&id).unwrap().add_hold_down_time,
+             Duration::from_secs(30)
+Diff in /home/runner/work/rustd-resolved/rustd-resolved/src/dnssec_rfc5011_runtime.rs at line 19:
+ use std::time::SystemTime;
+ 
+ const DEFAULT_STATE_PATH: &str = "/var/lib/rustd/resolved/rfc5011-trust-anchors.bin";
+-const DEFAULT_RUNTIME_ANCHOR_PATH: &str =
+-    "/run/dnssec-trust-anchors.d/rustd-rfc5011.positive";
++const DEFAULT_RUNTIME_ANCHOR_PATH: &str = "/run/dnssec-trust-anchors.d/rustd-rfc5011.positive";
+ const DNSKEY_FLAG_REVOKE: u16 = 1 << 7;
+ // Linux open(2) flags; keep the RFC5011 state publication dependency-free.
+ const O_NOFOLLOW: i32 = 0o400000;
+Diff in /home/runner/work/rustd-resolved/rustd-resolved/src/dnssec_rfc5011_runtime.rs at line 138:
+             )
+         })
+         .collect::<Vec<_>>();
+-    if !state.valid.iter().any(|anchor| canonical_owner(&anchor.owner) == ".") {
++    if !state
++        .valid
++        .iter()
++        .any(|anchor| canonical_owner(&anchor.owner) == ".")
++    {
+         lines.push(FAIL_CLOSED_ROOT_DS.to_owned());
+     }
+     lines.sort();
+Diff in /home/runner/work/rustd-resolved/rustd-resolved/src/dnssec_rfc5011_runtime.rs at line 157:
+         .mode(0o600)
+         .custom_flags(O_NOFOLLOW | O_CLOEXEC)
+         .open(&temp_path)
+-        .with_context(|| format!("creating RFC5011 runtime anchor file {}", temp_path.display()))?;
++        .with_context(|| {
++            format!(
++                "creating RFC5011 runtime anchor file {}",
++                temp_path.display()
++            )
++        })?;
+     for line in &lines {
+         file.write_all(line.as_bytes())?;
+         file.write_all(b"\n")?;
+Diff in /home/runner/work/rustd-resolved/rustd-resolved/src/dnssec_rfc5011_runtime.rs at line 351:
+ }
+ 
+ fn base64_encode(input: &[u8]) -> String {
+-    const TABLE: &[u8; 64] =
+-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
++    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+     let mut output = String::with_capacity(input.len().div_ceil(3) * 4);
+     for chunk in input.chunks(3) {
+         let first = chunk[0];
+Diff in /home/runner/work/rustd-resolved/rustd-resolved/tests/rfc5011_rollover.rs at line 2:
+ 
+ use std::time::{Duration, SystemTime};
+ 
+-use rustd_resolved::dnssec_rfc5011::{
+-    ObservedDnskey, TrustAnchorManager, TrustAnchorState,
+-};
++use rustd_resolved::dnssec_rfc5011::{ObservedDnskey, TrustAnchorManager, TrustAnchorState};
+ 
+ const ZONE_FLAG: u16 = 1 << 8;
+ const SEP_FLAG: u16 = 1;
+Diff in /home/runner/work/rustd-resolved/rustd-resolved/tests/rfc5011_rollover.rs at line 28:
+ 
+ fn reopen(path: &std::path::Path) -> TrustAnchorManager {
+     let mut manager = manager(path);
+-    manager.load_from_disk().expect("reload RFC5011 durable state");
+     manager
++        .load_from_disk()
++        .expect("reload RFC5011 durable state");
++    manager
+ }
+ 
+ #[test]
+Diff in /home/runner/work/rustd-resolved/rustd-resolved/tests/rfc5011_rollover.rs at line 79:
+     ));
+     assert_eq!(state.entry(&new_id).unwrap().state, TrustAnchorState::Valid);
+     assert_eq!(state.valid_anchors().len(), 2);
+-    state.save_to_disk().expect("persist accepted replacement anchor");
++    state
++        .save_to_disk()
++        .expect("persist accepted replacement anchor");
+     drop(state);
+ 
+     // The old key may be revoked only by its authenticated revoked-form key.
+Diff in /home/runner/work/rustd-resolved/rustd-resolved/tests/rfc5011_rollover.rs at line 95:
+         std::slice::from_ref(&new_id),
+         start + Duration::from_secs(13),
+     ));
+-    assert_eq!(state.entry(&old_id).unwrap().state, TrustAnchorState::Revoked);
+-    assert_eq!(state.entry(&new_id).unwrap().state, TrustAnchorState::Missing);
++    assert_eq!(
++        state.entry(&old_id).unwrap().state,
++        TrustAnchorState::Revoked
++    );
++    assert_eq!(
++        state.entry(&new_id).unwrap().state,
++        TrustAnchorState::Missing
++    );
+     assert!(state.revoked_anchor_ids().contains(&old_id));
+-    state.save_to_disk().expect("persist authenticated revocation");
++    state
++        .save_to_disk()
++        .expect("persist authenticated revocation");
+     drop(state);
+ 
+     // The replacement key returns, while the revoked key disappears. The old
+Diff in /home/runner/work/rustd-resolved/rustd-resolved/tests/rfc5011_rollover.rs at line 109:
+         std::slice::from_ref(&new_id),
+         start + Duration::from_secs(14),
+     ));
+-    assert_eq!(state.entry(&old_id).unwrap().state, TrustAnchorState::RemoveHoldDown);
++    assert_eq!(
++        state.entry(&old_id).unwrap().state,
++        TrustAnchorState::RemoveHoldDown
++    );
+     assert_eq!(state.entry(&new_id).unwrap().state, TrustAnchorState::Valid);
+     assert_eq!(state.valid_anchors().len(), 1);
+     state.save_to_disk().expect("persist remove hold-down");
