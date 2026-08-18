@@ -1,5 +1,9 @@
 name: Final RustD-Resolved release closure
 
+defaults:
+  run:
+    shell: 'bash --noprofile --norc -euo pipefail {0}'
+
 on:
   push:
     branches: [main]
@@ -35,15 +39,26 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential gfortran pkg-config libssl-dev python3
+            build-essential gfortran pkg-config libssl-dev liburing-dev python3
       - name: Certify resolver release surface
-        shell: bash
         run: |
-          set -euo pipefail
           grep -Fxq 'status=pass' certification/rfc5011-rollover-latest.txt
           grep -Fxq 'rust=1.74.0' certification/rfc5011-rollover-latest.txt
           grep -Fxq 'persistence=reopen-every-transition' certification/rfc5011-rollover-latest.txt
           grep -Fxq 'revoke=authenticated-self-signature' certification/rfc5011-rollover-latest.txt
+
+          # Make the io_uring memory-safety and peer-addressing fixes part of
+          # the final release contract rather than relying on a side workflow.
+          cc -std=c11 -O1 -g -Wall -Wextra -Werror -Iffi \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            ffi/test_iouring_dns.c ffi/iouring_dns.c -luring \
+            -o /tmp/test-iouring-dns-sanitize
+          SR_SKIP_RING=1 ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+            UBSAN_OPTIONS=halt_on_error=1 /tmp/test-iouring-dns-sanitize
+          cc -std=c11 -O2 -Wall -Wextra -Werror -Iffi \
+            ffi/test_iouring_dns.c ffi/iouring_dns.c -luring \
+            -o /tmp/test-iouring-dns
+          /tmp/test-iouring-dns
 
           cargo fmt --all -- --check
           cargo clippy --all-targets --all-features --locked -- -D warnings
@@ -65,8 +80,7 @@ jobs:
 
           # Runtime/install names must be RustD-owned. The two intentional
           # compatibility references are the conflict declaration and the
-          # NetworkManager disable knob. Benchmark source is excluded because
-          # it intentionally names the reference implementation.
+          # NetworkManager disable knob.
           bad="$(grep -R -nE 'systemd-resolved|systemctl|/run/systemd/resolve|resolvectl-rs' \
             src ffi nss scripts packaging Cargo.toml Makefile \
             | grep -v 'Conflicts=systemd-resolved.service' \
@@ -92,6 +106,8 @@ jobs:
           tested_sha=$sha
           rust_tests=pass
           native_tests=pass
+          iouring_asan_ubsan=pass
+          iouring_udp_peer_addressing=pass
           packaging=pass
           nss=pass
           install_image=pass
