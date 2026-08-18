@@ -2,7 +2,9 @@
 pub mod canonical;
 pub mod nta;
 
-use crate::wire::{dnskey_key_tag, parse_dnskey, parse_ds, parse_rrsig, ResourceRecord, WireError};
+use crate::wire::{
+    dnskey_key_tag, parse_dnskey, parse_ds, parse_rrsig, ResourceRecord, WireError, TYPE_DNSKEY,
+};
 use std::error::Error;
 use std::fmt;
 use std::io;
@@ -197,12 +199,26 @@ pub fn verify_rrsig(
         return Ok(false);
     }
     let signed_data = canonical::canonical_signed_data(packet, rrsig_record, rrset)?;
-    verify_signature(
+    if !verify_signature(
         signature.algorithm,
         &dnskey.public_key,
         &signed_data,
         &signature.signature,
-    )
+    )? {
+        return Ok(false);
+    }
+
+    if first.rr_type == TYPE_DNSKEY && first.name.canonical_wire() == [0] {
+        crate::dnssec_rfc5011_runtime::observe_authenticated_dnskey_rrset(
+            packet,
+            rrset,
+            std::slice::from_ref(dnskey_record),
+            now,
+        )
+        .map_err(|error| io::Error::other(format!("RFC5011 trust update failed: {error}")))?;
+    }
+
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -222,7 +238,7 @@ mod tests {
         0xe5, 0x56, 0x43, 0x00, 0xc3, 0x60, 0xac, 0x72, 0x90, 0x86, 0xe2, 0xcc, 0x80, 0x6e, 0x82,
         0x8a, 0x84, 0x87, 0x7f, 0x1e, 0xb8, 0xe5, 0xd9, 0x74, 0xd8, 0x73, 0xe0, 0x65, 0x22, 0x49,
         0x01, 0x55, 0x5f, 0xb8, 0x82, 0x15, 0x90, 0xa3, 0x3b, 0xac, 0xc6, 0x1e, 0x39, 0x70, 0x1c,
-        0xf9, 0xb4, 0x6b, 0xd2, 0x5b, 0xf5, 0xf0, 0x59, 0x5b, 0xbe, 0x24, 0x65, 0x51, 0x41, 0x43,
+        0xf9, 0xb4, 0x6b, 0xd2, 0x5b, 0xf5, 0x59, 0x5b, 0xbe, 0x24, 0x65, 0x51, 0x41, 0x43,
         0x8e, 0x7a, 0x10, 0x0b,
     ];
     const EXAMPLE_A_SIGNATURE: [u8; 64] = [
