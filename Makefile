@@ -79,6 +79,8 @@ check-packaging:
 	grep -Fq 'ReadWritePaths=/run/rustd /var/lib/rustd/resolved' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'd /var/lib/rustd/resolved 0750 rustd-resolve rustd-resolve -' packaging/tmpfiles/rustd-resolved.conf; \
 	grep -Fq 'drop_privileges("rustd-resolve", &config.runtime_directory)' src/main.rs; \
+	grep -Fq 'dnssec_rfc5011_runtime::publish_runtime_anchors()?;' src/main.rs; \
+	grep -Fq 'dnssec_rfc5011_runtime::observe_authenticated_dnskey_rrset(' src/dnssec.rs; \
 	grep -Fq '(UINT64_C(1) << CAP_NET_BIND_SERVICE) | (UINT64_C(1) << CAP_NET_RAW)' ffi/native.c; \
 	test -f packaging/NetworkManager/conf.d/20-rustd-resolved.conf; \
 	grep -Fq 'dns=none' packaging/NetworkManager/conf.d/20-rustd-resolved.conf; \
