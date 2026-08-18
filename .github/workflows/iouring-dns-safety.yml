@@ -1,4 +1,9 @@
 name: io_uring DNS safety
+# refresh exact-SHA certificate
+
+defaults:
+  run:
+    shell: 'bash --noprofile --norc -euo pipefail {0}'
 
 on:
   push:
@@ -31,9 +36,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install native dependencies
-        shell: bash
         run: |
-          set -euo pipefail
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
             build-essential liburing-dev
@@ -41,9 +44,7 @@ jobs:
       - name: Exercise io_uring and sanitizer contracts
         id: safety_checks
         continue-on-error: true
-        shell: bash
         run: |
-          set -euo pipefail
           cc -std=c11 -O2 -Wall -Wextra -Werror -fstack-protector-strong \
             -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -Iffi \
             ffi/test_iouring_dns.c ffi/iouring_dns.c -luring \
@@ -63,12 +64,11 @@ jobs:
           grep -Eq "depends=.*'liburing'" PKGBUILD
           grep -Eq "makedepends=.*'liburing'" PKGBUILD
           grep -Fq 'cargo:rustc-link-lib=uring' build.rs
+          grep -Fq 'cargo:rerun-if-changed=ffi/iouring_dns.h' build.rs
 
       - name: Publish exact safety voucher
         if: always()
-        shell: bash
         run: |
-          set -euo pipefail
           outcome='${{ steps.safety_checks.outcome }}'
           mkdir -p certification
           cat > certification/iouring-dns-safety-latest.txt <<EOF
@@ -78,6 +78,7 @@ jobs:
           dns_name_bitmap=asan-ubsan
           udp_peer_addressing=recvmsg-sendmsg-loopback
           liburing_packaging=checked
+          ffi_header_rebuild_tracking=checked
           EOF
           git fetch origin main
           git rebase origin/main
