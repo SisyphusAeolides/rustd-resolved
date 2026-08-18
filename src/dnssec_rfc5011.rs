@@ -276,9 +276,7 @@ impl TrustAnchorManager {
                     }
                 }
                 TrustAnchorState::Valid | TrustAnchorState::Missing => match present {
-                    Some(key)
-                        if key.is_revoked() && key.authenticated_self_revocation =>
-                    {
+                    Some(key) if key.is_revoked() && key.authenticated_self_revocation => {
                         if let Some(entry) = self.anchors.get_mut(&id) {
                             entry.state = TrustAnchorState::Revoked;
                             entry.flags |= REVOKE_FLAG;
@@ -398,7 +396,10 @@ impl TrustAnchorManager {
         self.anchors
             .values()
             .filter(|entry| {
-                matches!(entry.state, TrustAnchorState::Valid | TrustAnchorState::Missing)
+                matches!(
+                    entry.state,
+                    TrustAnchorState::Valid | TrustAnchorState::Missing
+                )
             })
             .collect()
     }
@@ -465,11 +466,7 @@ mod tests {
     }
 
     fn manager(path: &Path) -> TrustAnchorManager {
-        TrustAnchorManager::with_parameters(
-            path,
-            Duration::from_secs(10),
-            Duration::from_secs(10),
-        )
+        TrustAnchorManager::with_parameters(path, Duration::from_secs(10), Duration::from_secs(10))
     }
 
     #[test]
@@ -656,11 +653,7 @@ mod tests {
         let root_id = manager.seed_valid_anchor(&root, start);
         let candidate = key(200, ZONE_FLAG | SEP_FLAG, 30);
         let id = candidate.anchor_id();
-        manager.observe_validated_rrset(
-            &[root, candidate],
-            std::slice::from_ref(&root_id),
-            start,
-        );
+        manager.observe_validated_rrset(&[root, candidate], std::slice::from_ref(&root_id), start);
         assert_eq!(
             manager.entry(&id).unwrap().add_hold_down_time,
             Duration::from_secs(30)

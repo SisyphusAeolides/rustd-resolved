@@ -19,8 +19,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::SystemTime;
 
 const DEFAULT_STATE_PATH: &str = "/var/lib/rustd/resolved/rfc5011-trust-anchors.bin";
-const DEFAULT_RUNTIME_ANCHOR_PATH: &str =
-    "/run/dnssec-trust-anchors.d/rustd-rfc5011.positive";
+const DEFAULT_RUNTIME_ANCHOR_PATH: &str = "/run/dnssec-trust-anchors.d/rustd-rfc5011.positive";
 const DNSKEY_FLAG_REVOKE: u16 = 1 << 7;
 // Linux open(2) flags; keep the RFC5011 state publication dependency-free.
 const O_NOFOLLOW: i32 = 0o400000;
@@ -138,7 +137,11 @@ fn publish_manager_anchors(manager: &TrustAnchorManager, runtime_path: &Path) ->
             )
         })
         .collect::<Vec<_>>();
-    if !state.valid.iter().any(|anchor| canonical_owner(&anchor.owner) == ".") {
+    if !state
+        .valid
+        .iter()
+        .any(|anchor| canonical_owner(&anchor.owner) == ".")
+    {
         lines.push(FAIL_CLOSED_ROOT_DS.to_owned());
     }
     lines.sort();
@@ -157,7 +160,12 @@ fn publish_manager_anchors(manager: &TrustAnchorManager, runtime_path: &Path) ->
         .mode(0o600)
         .custom_flags(O_NOFOLLOW | O_CLOEXEC)
         .open(&temp_path)
-        .with_context(|| format!("creating RFC5011 runtime anchor file {}", temp_path.display()))?;
+        .with_context(|| {
+            format!(
+                "creating RFC5011 runtime anchor file {}",
+                temp_path.display()
+            )
+        })?;
     for line in &lines {
         file.write_all(line.as_bytes())?;
         file.write_all(b"\n")?;
@@ -351,8 +359,7 @@ fn canonical_owner(owner: &str) -> String {
 }
 
 fn base64_encode(input: &[u8]) -> String {
-    const TABLE: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut output = String::with_capacity(input.len().div_ceil(3) * 4);
     for chunk in input.chunks(3) {
         let first = chunk[0];

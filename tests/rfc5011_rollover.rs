@@ -2,9 +2,7 @@
 
 use std::time::{Duration, SystemTime};
 
-use rustd_resolved::dnssec_rfc5011::{
-    ObservedDnskey, TrustAnchorManager, TrustAnchorState,
-};
+use rustd_resolved::dnssec_rfc5011::{ObservedDnskey, TrustAnchorManager, TrustAnchorState};
 
 const ZONE_FLAG: u16 = 1 << 8;
 const SEP_FLAG: u16 = 1;
@@ -28,7 +26,9 @@ fn manager(path: &std::path::Path) -> TrustAnchorManager {
 
 fn reopen(path: &std::path::Path) -> TrustAnchorManager {
     let mut manager = manager(path);
-    manager.load_from_disk().expect("reload RFC5011 durable state");
+    manager
+        .load_from_disk()
+        .expect("reload RFC5011 durable state");
     manager
 }
 
@@ -79,7 +79,9 @@ fn rollover_revocation_and_purge_survive_every_restart_boundary() {
     ));
     assert_eq!(state.entry(&new_id).unwrap().state, TrustAnchorState::Valid);
     assert_eq!(state.valid_anchors().len(), 2);
-    state.save_to_disk().expect("persist accepted replacement anchor");
+    state
+        .save_to_disk()
+        .expect("persist accepted replacement anchor");
     drop(state);
 
     // The old key may be revoked only by its authenticated revoked-form key.
@@ -95,10 +97,18 @@ fn rollover_revocation_and_purge_survive_every_restart_boundary() {
         std::slice::from_ref(&new_id),
         start + Duration::from_secs(13),
     ));
-    assert_eq!(state.entry(&old_id).unwrap().state, TrustAnchorState::Revoked);
-    assert_eq!(state.entry(&new_id).unwrap().state, TrustAnchorState::Missing);
+    assert_eq!(
+        state.entry(&old_id).unwrap().state,
+        TrustAnchorState::Revoked
+    );
+    assert_eq!(
+        state.entry(&new_id).unwrap().state,
+        TrustAnchorState::Missing
+    );
     assert!(state.revoked_anchor_ids().contains(&old_id));
-    state.save_to_disk().expect("persist authenticated revocation");
+    state
+        .save_to_disk()
+        .expect("persist authenticated revocation");
     drop(state);
 
     // The replacement key returns, while the revoked key disappears. The old
@@ -109,7 +119,10 @@ fn rollover_revocation_and_purge_survive_every_restart_boundary() {
         std::slice::from_ref(&new_id),
         start + Duration::from_secs(14),
     ));
-    assert_eq!(state.entry(&old_id).unwrap().state, TrustAnchorState::RemoveHoldDown);
+    assert_eq!(
+        state.entry(&old_id).unwrap().state,
+        TrustAnchorState::RemoveHoldDown
+    );
     assert_eq!(state.entry(&new_id).unwrap().state, TrustAnchorState::Valid);
     assert_eq!(state.valid_anchors().len(), 1);
     state.save_to_disk().expect("persist remove hold-down");
