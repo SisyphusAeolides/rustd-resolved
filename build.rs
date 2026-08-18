@@ -1,4 +1,3 @@
-#![allow(warnings)]
 use std::env;
 use std::ffi::OsString;
 use std::fs;
@@ -59,9 +58,6 @@ fn compile_c(cc: &OsString, source: &str, output: &Path) {
         cc,
         &[
             OsString::from("-c"),
-            // The FFI uses C11 language features. C11 keeps cross builds compatible
-            // with older distribution compilers while native packaging may enforce
-            // a newer dialect independently.
             OsString::from("-std=c11"),
             OsString::from("-O2"),
             OsString::from("-fPIC"),
@@ -91,6 +87,7 @@ fn main() {
     println!("cargo:rerun-if-changed=ffi/native.h");
     println!("cargo:rerun-if-changed=ffi/routing.f90");
     println!("cargo:rerun-if-changed=ffi/iouring_dns.c");
+    println!("cargo:rerun-if-changed=ffi/iouring_dns.h");
     println!("cargo:rerun-if-changed=ffi/routing_score.f90");
 
     let target_os = env::var("CARGO_CFG_TARGET_OS").expect("target OS is set by cargo");
