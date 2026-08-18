@@ -1,4 +1,5 @@
 name: Run strict RustD-Resolved cleanup transaction
+# rerun against the staged Fedora NSS package head on 2026-08-18
 
 on:
   push:
