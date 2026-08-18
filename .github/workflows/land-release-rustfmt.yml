@@ -1,4 +1,5 @@
 name: Land resolver release formatting
+# trigger
 
 on:
   push:
