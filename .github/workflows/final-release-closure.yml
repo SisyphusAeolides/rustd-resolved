@@ -68,6 +68,13 @@ jobs:
           make check-nss
           make build
 
+          # Package/build dependency closure for the unconditional io_uring FFI.
+          grep -Fq 'liburing-dev' packaging/debian/control
+          grep -Eq "depends=.*'liburing'" PKGBUILD
+          grep -Eq "makedepends=.*'liburing'" PKGBUILD
+          grep -Fq 'cargo:rustc-link-lib=uring' build.rs
+          grep -Fq 'cargo:rerun-if-changed=ffi/iouring_dns.h' build.rs
+
           root="$(mktemp -d)"
           trap 'rm -rf "$root"' EXIT HUP INT TERM
           make DESTDIR="$root" install
@@ -78,15 +85,15 @@ jobs:
           test -f "$root/usr/share/dbus-1/system-services/org.freedesktop.resolve1.service"
           test -f "$root/usr/lib/tmpfiles.d/rustd-resolved.conf"
 
-          # Runtime/install names must be RustD-owned. The two intentional
-          # compatibility references are the conflict declaration and the
-          # NetworkManager disable knob.
-          bad="$(grep -R -nE 'systemd-resolved|systemctl|/run/systemd/resolve|resolvectl-rs' \
-            src ffi nss scripts packaging Cargo.toml Makefile \
+          # Judge cutover identity from the actual install image, not from test
+          # source that intentionally names the reference implementation.
+          bad="$(grep -R -nE 'systemctl|/run/systemd/resolve|resolvectl-rs' "$root" || true)"
+          test -z "$bad" || { printf '%s\n' "$bad" >&2; exit 1; }
+          legacy="$(grep -R -nF 'systemd-resolved' "$root" \
             | grep -v 'Conflicts=systemd-resolved.service' \
             | grep -v 'systemd-resolved=false' \
             || true)"
-          test -z "$bad" || { printf '%s\n' "$bad" >&2; exit 1; }
+          test -z "$legacy" || { printf '%s\n' "$legacy" >&2; exit 1; }
           ! grep -R -nF 'getenv("NOTIFY_SOCKET")' ffi src packaging scripts --exclude='*.md'
           ! grep -R -nF '/run/systemd/resolve' ffi src packaging scripts --exclude='*.md'
 
@@ -108,6 +115,7 @@ jobs:
           native_tests=pass
           iouring_asan_ubsan=pass
           iouring_udp_peer_addressing=pass
+          liburing_packaging=pass
           packaging=pass
           nss=pass
           install_image=pass
