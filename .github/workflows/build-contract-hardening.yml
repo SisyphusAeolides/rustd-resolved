@@ -1,4 +1,5 @@
 name: Native build contract hardening
+# retrigger after installation
 
 defaults:
   run:
