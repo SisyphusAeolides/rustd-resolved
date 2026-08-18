@@ -1,5 +1,5 @@
 name: Run resolver release rustfmt
-# trigger
+# save-and-reapply formatting across concurrent main updates
 
 on:
   push:
@@ -34,8 +34,12 @@ jobs:
           cargo fmt --all
           cargo fmt --all -- --check
           git diff --check
+          git diff --binary > /tmp/resolver-rustfmt.patch
+          git reset --hard HEAD
           git fetch origin main
           git rebase origin/main
+          git apply --index /tmp/resolver-rustfmt.patch
+          git reset
           cargo fmt --all
           cargo fmt --all -- --check
           git diff --check
@@ -56,7 +60,7 @@ jobs:
           git pull --ff-only origin main
           mkdir -p certification
           {
-            printf 'schema=rustd-resolved-rustfmt-diagnostic-v1\nstatus=failure\ntested_sha=%s\n' "$GITHUB_SHA"
+            printf 'schema=rustd-resolved-rustfmt-diagnostic-v2\nstatus=failure\ntested_sha=%s\n' "$GITHUB_SHA"
             printf '%s\n' '--- tail ---'
             tail -n 180 /tmp/resolver-rustfmt.log || true
           } > certification/rustfmt-diagnostic.txt
