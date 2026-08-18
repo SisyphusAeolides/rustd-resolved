@@ -407,6 +407,7 @@ impl Resolver {
         }
     }
 
+    #[cfg(test)]
     fn tls_possible(&self, server: ServerKey, strict: bool) -> bool {
         let mut states = self.states();
         let state = states.entry(server).or_default();

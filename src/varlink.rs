@@ -1751,6 +1751,7 @@ fn octescape(input: &[u8]) -> String {
     output
 }
 
+#[cfg(test)]
 fn response_flags(response: &[u8]) -> u64 {
     crate::resolver::response_protocol_flags(response)
 }

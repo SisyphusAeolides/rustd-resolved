@@ -113,6 +113,7 @@ fn address_lookup_reply(lookup: AddressLookup, ifindex: i32) -> (Vec<(i32, Strin
     (names, flags)
 }
 
+#[cfg(test)]
 fn response_flags(response: &[u8]) -> u64 {
     crate::resolver::response_protocol_flags(response)
 }

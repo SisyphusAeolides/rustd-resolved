@@ -11,7 +11,7 @@ use crate::routing::{LinkError, LinkState};
 use crate::log_control::LogControlState;
 use crate::wire::{
     extract_answer_records, extract_service_records_for_name, CLASS_IN, TYPE_A, TYPE_AAAA,
-    Header, TYPE_SRV, TYPE_TXT,
+    TYPE_SRV, TYPE_TXT,
 };
 use std::collections::{BTreeSet, HashMap};
 use std::convert::TryFrom;

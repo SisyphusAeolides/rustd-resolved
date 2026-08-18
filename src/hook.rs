@@ -376,6 +376,7 @@ fn check_cancellation() -> io::Result<()> {
         .map_err(|_| io::Error::new(io::ErrorKind::Interrupted, "resolver client disconnected"))
 }
 
+#[cfg(test)]
 fn read_frame(stream: &mut UnixStream) -> io::Result<Vec<u8>> {
     let mut output = Vec::new();
     let mut buffer = [0u8; 4096];

@@ -755,7 +755,6 @@ struct ParsedRecord {
 #[derive(Clone, Debug)]
 struct ParsedMessage {
     id: u16,
-    flags: u16,
     questions: Vec<ParsedQuestion>,
     records: Vec<ParsedRecord>,
 }
@@ -765,7 +764,6 @@ fn parse_message(packet: &[u8]) -> io::Result<ParsedMessage> {
         return Err(invalid_data("short mDNS packet"));
     }
     let id = read_u16(packet, 0)?;
-    let flags = read_u16(packet, 2)?;
     let questions = read_u16(packet, 4)?;
     let answers = read_u16(packet, 6)?;
     let authorities = read_u16(packet, 8)?;
@@ -825,7 +823,6 @@ fn parse_message(packet: &[u8]) -> io::Result<ParsedMessage> {
     }
     Ok(ParsedMessage {
         id,
-        flags,
         questions: parsed_questions,
         records,
     })

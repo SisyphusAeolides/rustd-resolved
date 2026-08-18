@@ -24,13 +24,16 @@ const DNS_FLAG_RD: u16 = 1 << 8;
 const DNS_FLAG_RA: u16 = 1 << 7;
 const DNS_CLASS_MASK: u16 = 0x7fff;
 const DNS_CLASS_CACHE_FLUSH: u16 = 0x8000;
+#[cfg(test)]
 const TYPE_A: u16 = 1;
 const TYPE_NS: u16 = 2;
 const TYPE_CNAME: u16 = 5;
 const TYPE_SOA: u16 = 6;
 const TYPE_PTR: u16 = 12;
 const TYPE_MX: u16 = 15;
+#[cfg(test)]
 const TYPE_TXT: u16 = 16;
+#[cfg(test)]
 const TYPE_AAAA: u16 = 28;
 const TYPE_SRV: u16 = 33;
 const TYPE_DNAME: u16 = 39;
@@ -122,7 +125,6 @@ impl From<io::Error> for MdnsRuntimeError {
 #[derive(Clone, Debug)]
 struct RuntimeInterface {
     interface: MdnsInterface,
-    address: IpAddr,
 }
 
 #[derive(Debug)]
@@ -871,25 +873,13 @@ fn interfaces() -> Result<Vec<RuntimeInterface>, MdnsRuntimeError> {
         if entry.flags & (IFA_F_DADFAILED | IFA_F_TENTATIVE) != 0 {
             continue;
         }
-        let (family, address) = match entry.family {
-            AF_INET => (
-                MdnsAddressFamily::Ipv4,
-                IpAddr::V4(Ipv4Addr::new(
-                    entry.address[0],
-                    entry.address[1],
-                    entry.address[2],
-                    entry.address[3],
-                )),
-            ),
-            AF_INET6 => (
-                MdnsAddressFamily::Ipv6,
-                IpAddr::V6(Ipv6Addr::from(entry.address)),
-            ),
+        let family = match entry.family {
+            AF_INET => MdnsAddressFamily::Ipv4,
+            AF_INET6 => MdnsAddressFamily::Ipv6,
             _ => continue,
         };
         output.push(RuntimeInterface {
             interface: MdnsInterface::new(entry.ifindex, family),
-            address,
         });
     }
     Ok(output)

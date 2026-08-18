@@ -1,0 +1,9 @@
+schema=rustd-resolved-cleanup-v2
+status=pass
+tested_base_sha=3ad3475dc106c00ffd4b00a7472b6bce1ae8d424
+clippy=pass
+tests=pass
+native=pass
+packaging=pass
+nss=pass
+endpoint_concurrency=bounded
