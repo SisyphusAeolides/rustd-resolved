@@ -1,0 +1,43 @@
+name: Land distribution license text
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/land-license-text.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: land-rustd-resolved-license-text
+  cancel-in-progress: false
+
+jobs:
+  land:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Install exact LGPL license text
+        shell: 'bash --noprofile --norc -euo pipefail {0}'
+        run: |
+          git fetch origin main
+          git checkout main
+          git pull --ff-only origin main
+          test -s /usr/share/common-licenses/LGPL-2.1
+          cp /usr/share/common-licenses/LGPL-2.1 LICENSE.LGPL-2.1
+          grep -Fxq '                  GNU LESSER GENERAL PUBLIC LICENSE' LICENSE.LGPL-2.1
+          grep -Fxq '                       Version 2.1, February 1999' LICENSE.LGPL-2.1
+          grep -Fxq '                     END OF TERMS AND CONDITIONS' LICENSE.LGPL-2.1
+          test -s README.md
+          rm -f .github/workflows/land-license-text.yml
+          git add LICENSE.LGPL-2.1 .github/workflows/land-license-text.yml
+          git diff --cached --check
+          git config user.name 'Kenny Glowner'
+          git config user.email 'SisyphusAeolides@pm.me'
+          git commit -m 'Add distribution license text'
+          git pull --rebase origin main
+          test -s LICENSE.LGPL-2.1
+          git push origin HEAD:main
