@@ -101,6 +101,33 @@ jobs:
               "fn response_flags(response: &[u8]) -> u64",
           )
 
+          replace_once(
+              "src/dnssec.rs",
+              '''    if first.rr_type == TYPE_DNSKEY && first.name.canonical_wire() == [0] {
+        crate::dnssec_rfc5011_runtime::observe_authenticated_dnskey_rrset(
+            packet,
+            rrset,
+            std::slice::from_ref(dnskey_record),
+            now,
+        )
+        .map_err(|error| io::Error::other(format!("RFC5011 trust update failed: {error}")))?;
+    }
+''',
+              '''    if first.rr_type == TYPE_DNSKEY && first.name.canonical_wire() == [0] {
+        if let Err(error) = crate::dnssec_rfc5011_runtime::observe_authenticated_dnskey_rrset(
+            packet,
+            rrset,
+            std::slice::from_ref(dnskey_record),
+            now,
+        ) {
+            eprintln!(
+                "rustd-resolved: authenticated root DNSKEY verified but RFC5011 state update failed: {error}"
+            );
+        }
+    }
+''',
+          )
+
           replacements = (
               ('print_string_field(&label, &value, "llmnr")', 'print_string_field(label, value, "llmnr")'),
               ('print_string_field(&label, &value, "mDNS")', 'print_string_field(label, value, "mDNS")'),
@@ -116,6 +143,9 @@ jobs:
           PY
           cargo fmt --all
           cargo fmt --all -- --check
+          cargo test --all-features --locked \
+            hyper_resolver::hyper_dnssec_tests::anchored_ds_dnskey_chain_fetches_and_rejects_forged_delegation \
+            -- --exact
           cargo clippy --all-targets --all-features --locked -- -D warnings
           cargo test --all-targets --all-features --locked
           make check-native
@@ -135,6 +165,7 @@ jobs:
           nss=pass
           endpoint_limit=implemented
           production_cfg=pass
+          dnssec_persistence_separation=pass
           EOF
           rm -f \
             .github/workflows/land-source-cleanup-v3.yml \
@@ -160,11 +191,11 @@ jobs:
           git pull --ff-only origin main
           mkdir -p certification
           {
-            printf 'schema=rustd-resolved-warning-clean-diagnostic-v2\n'
+            printf 'schema=rustd-resolved-warning-clean-diagnostic-v3\n'
             printf 'status=failure\n'
             printf 'tested_sha=%s\n' "$GITHUB_SHA"
             printf '%s\n' '--- tail ---'
-            tail -n 900 /tmp/rustd-resolved-warning-clean.log || true
+            tail -n 1000 /tmp/rustd-resolved-warning-clean.log || true
           } > certification/source-cleanup-diagnostic.txt
           git add certification/source-cleanup-diagnostic.txt
           git diff --cached --check
