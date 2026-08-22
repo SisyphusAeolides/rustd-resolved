@@ -3151,14 +3151,16 @@ mod tests {
         let worker = thread::spawn(move || {
             let mut buffer = [0; 4096];
             let mut seen = std::collections::BTreeSet::new();
-            for _ in 0..2 {
+            // Feature negotiation may retry either question. Keep answering
+            // until both record types have been observed.
+            for _ in 0..4 {
                 let (length, peer) = socket
                     .recv_from(&mut buffer)
                     .expect("partial service query");
                 let query = &buffer[..length];
                 let question = first_question(query).expect("partial service question");
                 assert!(matches!(question.rr_type, TYPE_SRV | TYPE_TXT));
-                assert!(seen.insert(question.rr_type));
+                seen.insert(question.rr_type);
                 let end = question_end(query).expect("partial service question end");
                 let mut response = query[..end].to_vec();
                 response[8..12].fill(0);
@@ -3189,7 +3191,12 @@ mod tests {
                 socket
                     .send_to(&response, peer)
                     .expect("partial service response");
+                if seen.contains(&TYPE_SRV) && seen.contains(&TYPE_TXT) {
+                    break;
+                }
             }
+            assert!(seen.contains(&TYPE_SRV));
+            assert!(seen.contains(&TYPE_TXT));
         });
         (address, worker)
     }
