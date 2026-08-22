@@ -11,5 +11,8 @@ pub mod parity;
 pub mod parity_dnssd;
 #[path = "../mdns_responder.rs"]
 pub mod responder;
+// Focused mDNS tests retain record-type constants that are intentionally not
+// part of the production responder path.
+#[cfg_attr(test, allow(dead_code))]
 #[path = "../mdns_runtime.rs"]
 pub mod runtime;

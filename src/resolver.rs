@@ -6,6 +6,9 @@ include!("resolver_methods_02.rs");
 include!("resolver_methods_03.rs");
 include!("resolver_server_identity.rs");
 include!("resolver_methods_04.rs");
+// This split fragment retains test-only feature probes used by focused
+// transport tests. Keep their dead-code scope local to the test build.
+#[cfg_attr(test, allow(dead_code))]
 include!("resolver_edns.rs");
 include!("resolver_dnssec.rs");
 include!("resolver_methods_05.rs");

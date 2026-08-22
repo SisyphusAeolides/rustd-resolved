@@ -43,6 +43,10 @@ pub(crate) mod query_cancel;
 pub mod resolv_conf;
 pub mod resolvconf_publish;
 pub mod resolve_flags;
+// The D-Bus CLI bridge intentionally consumes owned labels/values through a
+// borrowed formatting boundary, and its boolean parser tests use explicit
+// expected literals. Keep these style lints local to that compatibility edge.
+#[allow(clippy::bool_assert_comparison, clippy::needless_borrow)]
 pub mod resolvectl_dbus;
 pub mod resolver;
 pub mod routing;
@@ -55,7 +59,9 @@ pub mod supremacy;
 pub mod synthetic;
 pub mod tls;
 pub mod transport;
-#[cfg_attr(test, allow(unused_imports))]
+// Varlink response projection retains test-only wire helpers for focused
+// protocol assertions. They are not part of the production binary surface.
+#[cfg_attr(test, allow(dead_code, unused_imports))]
 pub mod varlink;
 pub(crate) mod varlink_polkit;
 pub mod wire;
