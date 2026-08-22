@@ -209,13 +209,16 @@ pub fn verify_rrsig(
     }
 
     if first.rr_type == TYPE_DNSKEY && first.name.canonical_wire() == [0] {
-        crate::dnssec_rfc5011_runtime::observe_authenticated_dnskey_rrset(
+        if let Err(error) = crate::dnssec_rfc5011_runtime::observe_authenticated_dnskey_rrset(
             packet,
             rrset,
             std::slice::from_ref(dnskey_record),
             now,
-        )
-        .map_err(|error| io::Error::other(format!("RFC5011 trust update failed: {error}")))?;
+        ) {
+            eprintln!(
+                "rustd-resolved: authenticated root DNSKEY verified but RFC5011 state update failed: {error}"
+            );
+        }
     }
 
     Ok(true)
