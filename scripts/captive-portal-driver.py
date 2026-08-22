@@ -272,6 +272,22 @@ def wait_for_answer(
     raise RuntimeError(f"{protocol} query did not converge to {expected}: {last}")
 
 
+def wait_for_quiescence(server: AnswerServer) -> int:
+    """Return a stable query count after protocol-level retries have drained."""
+    deadline = time.monotonic() + 2
+    previous = server.count()
+    stable_since = time.monotonic()
+    while time.monotonic() < deadline:
+        time.sleep(0.05)
+        current = server.count()
+        if current != previous:
+            previous = current
+            stable_since = time.monotonic()
+        elif time.monotonic() - stable_since >= 0.2:
+            return current
+    raise RuntimeError("upstream query stream did not become quiescent")
+
+
 def write_evidence(path: Path, revision: str, iterations: int) -> None:
     record = {
         "gate": "dns.captive_portal",
@@ -344,9 +360,12 @@ def run(options: argparse.Namespace) -> int:
                     expected = NORMAL_ANSWER
                     for cycle in range(1, options.iterations + 1):
                         write_config(config, target.port)
-                        old_before = active.count()
                         target_before = target.count()
                         process.send_signal(signal.SIGHUP)
+                        # The signal is asynchronous. Establish the removed
+                        # server's baseline only after its in-flight work has
+                        # drained, then issue the post-transition query.
+                        old_before = wait_for_quiescence(active)
                         protocol = "udp" if cycle % 2 else "tcp"
                         answer = wait_for_answer(
                             process, stub_port, expected, protocol, 0x7200 + cycle * 16

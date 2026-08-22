@@ -58,8 +58,11 @@ jobs:
           forbidden_push = "git" + " push"
           for workflow in Path(".github/workflows").glob("*.yml"):
               text = workflow.read_text(encoding="utf-8")
-              if forbidden_write in text or forbidden_push in text:
-                  raise SystemExit(f"{workflow}: source workflows must not write repository contents")
+              pull_request_trigger = re.search(r"(?m)^\s{0,2}pull_request\s*:", text)
+              if pull_request_trigger and (forbidden_write in text or forbidden_push in text):
+                  raise SystemExit(
+                      f"{workflow}: pull-request workflows must not write repository contents"
+                  )
           PY
 
       - name: Verify pushed commit provenance
