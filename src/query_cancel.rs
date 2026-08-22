@@ -6,7 +6,8 @@ use std::sync::Arc;
 
 thread_local! {
     // Keep the non-const initializer compatible with the Rust 1.74 build contract.
-    static CURRENT: RefCell<Option<QueryCancellation>> = const { RefCell::new(None) };
+    #[allow(unknown_lints, clippy::missing_const_for_thread_local)]
+    static CURRENT: RefCell<Option<QueryCancellation>> = RefCell::new(None);
 }
 
 #[derive(Clone, Debug, Default)]
