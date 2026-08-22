@@ -82,6 +82,25 @@ jobs:
               "src/varlink.rs",
               "fn response_flags(response: &[u8]) -> u64",
           )
+
+          control = Path("src/resolvectl_dbus.rs")
+          text = control.read_text()
+          replacements = (
+              ('print_string_field(&label, &value, "llmnr")', 'print_string_field(label, value, "llmnr")'),
+              ('print_string_field(&label, &value, "mDNS")', 'print_string_field(label, value, "mDNS")'),
+              ('print_string_field(&label, &value, "dnsOverTLS")', 'print_string_field(label, value, "dnsOverTLS")'),
+              ('print_string_field(&label, &value, "dnssec")', 'print_string_field(label, value, "dnssec")'),
+              ('assert_eq!(parse_boolean("yes").unwrap(), true);', 'assert!(parse_boolean("yes").unwrap());'),
+              ('assert_eq!(parse_boolean("t").unwrap(), true);', 'assert!(parse_boolean("t").unwrap());'),
+              ('assert_eq!(parse_boolean("OFF").unwrap(), false);', 'assert!(!parse_boolean("OFF").unwrap());'),
+              ('assert_eq!(parse_boolean("N").unwrap(), false);', 'assert!(!parse_boolean("N").unwrap());'),
+          )
+          for old, new in replacements:
+              if old in text:
+                  text = text.replace(old, new, 1)
+              elif new not in text:
+                  raise SystemExit(f"resolvectl source fragment is missing: {old}")
+          control.write_text(text)
           PY
 
           cat > .github/workflows/final-release-closure.yml <<'YAML'
