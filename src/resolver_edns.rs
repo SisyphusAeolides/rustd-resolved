@@ -407,17 +407,6 @@ impl Resolver {
         }
     }
 
-    #[cfg(test)]
-    fn tls_possible(&self, server: ServerKey, strict: bool) -> bool {
-        let mut states = self.states();
-        let state = states.entry(server).or_default();
-        if strict {
-            true
-        } else {
-            state.features.current_possible_level().uses_tls()
-        }
-    }
-
     fn record_tls_failure(&self, server: ServerKey, strict: bool) {
         self.tls_streams
             .lock()

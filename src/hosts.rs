@@ -247,6 +247,10 @@ fn is_loopback_address(address: &IpAddr) -> bool {
 fn is_localhost_name(name: &str) -> bool {
     name == "localhost"
         || name == "localhost.localdomain"
+        || name == "localhost4"
+        || name == "localhost4.localdomain4"
+        || name == "localhost6"
+        || name == "localhost6.localdomain6"
         || name.ends_with(".localhost")
         || name.ends_with(".localhost.localdomain")
 }
@@ -380,6 +384,13 @@ mod tests {
         let redundant = Hosts::parse("127.0.0.1 localhost localhost.localdomain\n::1 localhost\n");
         assert!(redundant.by_name.is_empty());
         assert!(redundant.by_address.is_empty());
+
+        let distribution_defaults = Hosts::parse(
+            "127.0.0.1 localhost localhost.localdomain localhost4 localhost4.localdomain4\n\
+             ::1 localhost localhost.localdomain localhost6 localhost6.localdomain6\n",
+        );
+        assert!(distribution_defaults.by_name.is_empty());
+        assert!(distribution_defaults.by_address.is_empty());
 
         let custom = Hosts::parse("127.0.0.1 localhost custom-name\n");
         assert!(custom.by_name.contains_key("localhost"));

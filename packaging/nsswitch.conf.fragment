@@ -1,5 +1,5 @@
 # Merge into /etc/nsswitch.conf hosts: line (do not wipe vendor file blindly)
 # RustD-Resolved synthesizes localhost and the machine hostname itself, so a
-# separate nss-myhostname module is not required for a systemd-libs-free host.
+# a separate hostname-synthesis NSS module is not required for this host mode.
 # Recommended Fedora/RHEL cutover line:
 hosts: files rustd_dns [!UNAVAIL=return] dns

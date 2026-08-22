@@ -87,7 +87,7 @@ check-packaging:
 	grep -Fq 'rc-manager=unmanaged' packaging/NetworkManager/conf.d/20-rustd-resolved.conf; \
 	grep -Fq 'systemd-resolved=false' packaging/NetworkManager/conf.d/20-rustd-resolved.conf; \
 	grep -Fq 'L+ /etc/resolv.conf - - - - /run/rustd/resolve/stub-resolv.conf' packaging/tmpfiles/rustd-resolved.conf; \
-	grep -Fq 'hosts: files myhostname rustd_dns [!UNAVAIL=return] dns' packaging/nsswitch.conf.fragment; \
+	grep -Fq 'hosts: files rustd_dns [!UNAVAIL=return] dns' packaging/nsswitch.conf.fragment; \
 	grep -Fq 'Exec=/usr/bin/rustctl start rustd-resolved.service' packaging/dbus/org.freedesktop.resolve1.service; \
 	grep -Fq '<policy user="rustd-resolve">' packaging/dbus/org.freedesktop.resolve1.conf; \
 	grep -Fq 'unix-user:rustd-resolve' packaging/polkit/org.freedesktop.resolve1.policy; \

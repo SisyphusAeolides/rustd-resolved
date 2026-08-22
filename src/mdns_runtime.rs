@@ -31,10 +31,6 @@ const TYPE_CNAME: u16 = 5;
 const TYPE_SOA: u16 = 6;
 const TYPE_PTR: u16 = 12;
 const TYPE_MX: u16 = 15;
-#[cfg(test)]
-const TYPE_TXT: u16 = 16;
-#[cfg(test)]
-const TYPE_AAAA: u16 = 28;
 const TYPE_SRV: u16 = 33;
 const TYPE_DNAME: u16 = 39;
 const TYPE_NSEC: u16 = 47;

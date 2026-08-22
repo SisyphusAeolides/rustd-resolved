@@ -1751,11 +1751,6 @@ fn octescape(input: &[u8]) -> String {
     output
 }
 
-#[cfg(test)]
-fn response_flags(response: &[u8]) -> u64 {
-    crate::resolver::response_protocol_flags(response)
-}
-
 fn resolve_record(parameters: &Value, resolver: &Resolver) -> Value {
     let Some(name) = parameters.get("name").and_then(Value::as_str) else {
         return invalid_parameter("name");

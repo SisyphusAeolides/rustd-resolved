@@ -485,10 +485,10 @@ fn print_value(label: &str, command: &str, value: &Value) -> Result<(), Box<dyn 
                 "no"
             }
         ),
-        "llmnr" => print_string_field(&label, &value, "llmnr"),
-        "mdns" => print_string_field(&label, &value, "mDNS"),
-        "dnsovertls" => print_string_field(&label, &value, "dnsOverTLS"),
-        "dnssec" => print_string_field(&label, &value, "dnssec"),
+        "llmnr" => print_string_field(label, value, "llmnr"),
+        "mdns" => print_string_field(label, value, "mDNS"),
+        "dnsovertls" => print_string_field(label, value, "dnsOverTLS"),
+        "dnssec" => print_string_field(label, value, "dnssec"),
         "nta" => {
             let values = value
                 .get("negativeTrustAnchors")
@@ -846,10 +846,10 @@ mod tests {
 
     #[test]
     fn parses_boolean_spellings() {
-        assert_eq!(parse_boolean("yes").unwrap(), true);
-        assert_eq!(parse_boolean("t").unwrap(), true);
-        assert_eq!(parse_boolean("OFF").unwrap(), false);
-        assert_eq!(parse_boolean("N").unwrap(), false);
+        assert!(parse_boolean("yes").unwrap());
+        assert!(parse_boolean("t").unwrap());
+        assert!(!parse_boolean("OFF").unwrap());
+        assert!(!parse_boolean("N").unwrap());
         assert!(parse_boolean("maybe").is_err());
     }
 
