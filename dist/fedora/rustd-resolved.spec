@@ -10,6 +10,8 @@ BuildRequires:  cargo >= 1.74
 BuildRequires:  rust >= 1.74
 BuildRequires:  gcc
 BuildRequires:  gcc-gfortran
+BuildRequires:  libasan
+BuildRequires:  libubsan
 BuildRequires:  make
 BuildRequires:  openssl-devel
 BuildRequires:  liburing-devel
