@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 thread_local! {
     // Keep the non-const initializer compatible with the Rust 1.74 build contract.
-    static CURRENT: RefCell<Option<QueryCancellation>> = RefCell::new(None);
+    static CURRENT: RefCell<Option<QueryCancellation>> = const { RefCell::new(None) };
 }
 
 #[derive(Clone, Debug, Default)]
