@@ -8,6 +8,8 @@ Source0:        rustd-resolved-%{version}.tar.gz
 
 BuildRequires:  cargo >= 1.74
 BuildRequires:  rust >= 1.74
+BuildRequires:  rustfmt
+BuildRequires:  clippy
 BuildRequires:  gcc
 BuildRequires:  gcc-gfortran
 BuildRequires:  libasan
