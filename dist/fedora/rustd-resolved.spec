@@ -1,3 +1,5 @@
+%{!?systemd_compat_evr:%global systemd_compat_evr 0:0-0}
+
 Name:           rustd-resolved
 Version:        0.2.3
 Release:        1%{?dist}
@@ -22,7 +24,9 @@ BuildRequires:  python3
 
 Requires:       rustd >= 0.1.2
 Requires:       %{name}-nss%{?_isa} = %{version}-%{release}
-Conflicts:      systemd-resolved
+Provides:       systemd-resolved = %{systemd_compat_evr}
+Provides:       systemd-resolved%{?_isa} = %{systemd_compat_evr}
+Obsoletes:      systemd-resolved <= %{systemd_compat_evr}
 
 %description
 RustD-Resolved is the native DNS resolver and service integration for RustD.
