@@ -15,6 +15,7 @@ BuildRequires:  gcc-gfortran
 BuildRequires:  libasan
 BuildRequires:  libubsan
 BuildRequires:  make
+BuildRequires:  openssl
 BuildRequires:  openssl-devel
 BuildRequires:  liburing-devel
 BuildRequires:  python3
