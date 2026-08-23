@@ -72,7 +72,7 @@ jobs:
           else
               rm -f certification/rfc5011-rollover-diagnostic.txt
           fi
-          git add -A certification/rfc5011-rollover-latest.txt certification/rfc5011-rollover-diagnostic.txt
+          git add -A certification/
           if git diff --cached --quiet; then
               [ "$status" = pass ]
               exit
@@ -80,5 +80,5 @@ jobs:
           git config user.name 'Kenny Glowner'
           git config user.email 'SisyphusAeolides@pm.me'
           git commit -m "Record RFC5011 rollover certification $status"
-          git push origin HEAD:main
+          bash scripts/push-certification-voucher.sh
           [ "$status" = pass ]

@@ -80,13 +80,11 @@ jobs:
           liburing_packaging=checked
           ffi_header_rebuild_tracking=checked
           EOF
-          git fetch origin main
-          git rebase origin/main
           git add certification/iouring-dns-safety-latest.txt
           if ! git diff --cached --quiet; then
             git config user.name 'Kenny Glowner'
             git config user.email 'SisyphusAeolides@pm.me'
             git commit -m 'Record io_uring DNS safety certification'
-            git push origin HEAD:main
+            bash scripts/push-certification-voucher.sh
           fi
           test "$outcome" = success
