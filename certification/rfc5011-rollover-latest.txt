@@ -1,6 +1,6 @@
 schema=rustd-resolved-rfc5011-rollover-v1
 status=pass
-tested_sha=f309e354f4872b4fbe238fe82c29a48a615054b1
+tested_sha=4a70a3804dcac42235c5c490680cf88ba75ec56e
 cert_outcome=success
 rust=1.74.0
 persistence=reopen-every-transition
