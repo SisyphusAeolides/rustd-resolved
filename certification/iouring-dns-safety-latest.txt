@@ -1,6 +1,6 @@
 schema=rustd-resolved-iouring-dns-safety-v1
 status=success
-tested_sha=f309e354f4872b4fbe238fe82c29a48a615054b1
+tested_sha=4a70a3804dcac42235c5c490680cf88ba75ec56e
 dns_name_bitmap=asan-ubsan
 udp_peer_addressing=recvmsg-sendmsg-loopback
 liburing_packaging=checked
