@@ -18,7 +18,14 @@ done
 # Keep this focused gate on the repository's compatibility compiler even when
 # an interactive shell has a newer nightly toolchain selected.
 OPS_RUST_TOOLCHAIN="${RUSTD_RESOLVED_RUST_TOOLCHAIN:-1.74.0}"
-RUST_CARGO=(cargo "+${OPS_RUST_TOOLCHAIN}")
+if command -v rustup >/dev/null 2>&1; then
+    RUST_CARGO=(cargo "+${OPS_RUST_TOOLCHAIN}")
+else
+    # Distribution buildroots provide a versioned Cargo package without the
+    # rustup proxy. The RPM spec constrains that package to the supported
+    # minimum, so invoking it directly preserves the same contract.
+    RUST_CARGO=(cargo)
+fi
 
 assert_unit_contract() {
     local unit="$1"
