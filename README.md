@@ -4,6 +4,21 @@
 
 The resolver is built from Rust, C, Fortran, Idris, and Agda. It owns DNS stub service, upstream transports, cache, split-DNS routing, DNSSEC, DNS-over-TLS, LLMNR, mDNS, DNS-SD, NSS integration, lifecycle handling, and the RustD resolver control plane.
 
+> **Current status (2026-08-24):** the native resolver, packaging, NSS, and
+> compatibility-boundary gates are passing, including the current 541-test
+> Rust validation run. The resolver is included in the RustD Fedora image, and
+> artifact inspection confirms the native RustD resolver paths and the absence
+> of the `systemd-resolved` RPM.
+>
+> **Production boundary:** this is not a claim that `rustd-resolved` is a 100%
+> certified, drop-in replacement for `systemd-resolved`. The paired RustD
+> Fedora installation still requires repeated installed-system VM validation
+> covering boot under RustD PID 1, resolver startup/restart, NSS and DNF name
+> resolution, NetworkManager changes, DNSSEC/DNS-over-TLS policy, crash/fault
+> recovery, privilege boundaries, and long-running soak tests after the
+> `systemd*` package stack is removed. Keep a recovery path until that exact
+> release image passes.
+
 ## Native identity
 
 The native resolver contract is:
