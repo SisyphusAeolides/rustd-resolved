@@ -126,17 +126,17 @@ fn configured_resolver(options: &Options) -> Result<(Config, ReloadOverrides), B
 fn reload_overrides(options: &Options, config: &Config) -> ReloadOverrides {
     let stub_environment = env::var("RUSTD_RESOLVED_STUB_ADDR")
         .ok()
-        .map_or(false, |value| !value.trim().is_empty());
+        .is_some_and(|value| !value.trim().is_empty());
     let proxy_environment = env::var("RUSTD_RESOLVED_STUB_ADDR_ALT").is_ok();
     let runtime_environment = env::var("RUSTD_RESOLVED_RUN_DIR")
         .ok()
-        .map_or(false, |value| !value.trim().is_empty());
+        .is_some_and(|value| !value.trim().is_empty());
     let varlink_environment = env::var("RUSTD_RESOLVED_VARLINK")
         .ok()
-        .map_or(false, |value| !value.trim().is_empty());
+        .is_some_and(|value| !value.trim().is_empty());
     let workers_environment = env::var("RUSTD_RESOLVED_WORKERS")
         .ok()
-        .map_or(false, |value| !value.trim().is_empty());
+        .is_some_and(|value| !value.trim().is_empty());
     let upstream_override = !options.upstreams.is_empty();
     let listeners_override =
         stub_environment || !options.listeners.is_empty() || options.port.is_some();

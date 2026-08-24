@@ -130,7 +130,7 @@ impl Resolver {
                         return Err(error);
                     }
                     self.record_success(server_key, started.elapsed());
-                    if response_full_rcode(&response).map_or(false, |(rcode, _, _)| {
+                    if response_full_rcode(&response).is_ok_and(|(rcode, _, _)| {
                         (rcode & 0x000f) == RCODE_REFUSED
                     }) {
                         last_response = Some((response, server));

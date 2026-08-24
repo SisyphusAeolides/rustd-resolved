@@ -360,29 +360,21 @@ fn bind_endpoints(
 ) -> io::Result<()> {
     for &address in addresses {
         if udp_enabled {
-            match UdpSocket::bind(address) {
-                Ok(udp) => {
-                    udp.set_read_timeout(Some(Duration::from_millis(250)))?;
-                    udp_endpoints.push(UdpEndpoint {
-                        socket: Arc::new(udp),
-                        mode,
-                    });
-                }
-                Err(error) => return Err(error),
-            }
+            let udp = UdpSocket::bind(address)?;
+            udp.set_read_timeout(Some(Duration::from_millis(250)))?;
+            udp_endpoints.push(UdpEndpoint {
+                socket: Arc::new(udp),
+                mode,
+            });
         }
 
         if tcp_enabled {
-            match TcpListener::bind(address) {
-                Ok(tcp) => {
-                    tcp.set_nonblocking(true)?;
-                    tcp_endpoints.push(TcpEndpoint {
-                        listener: tcp,
-                        mode,
-                    });
-                }
-                Err(error) => return Err(error),
-            }
+            let tcp = TcpListener::bind(address)?;
+            tcp.set_nonblocking(true)?;
+            tcp_endpoints.push(TcpEndpoint {
+                listener: tcp,
+                mode,
+            });
         }
     }
     Ok(())

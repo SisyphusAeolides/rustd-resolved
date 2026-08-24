@@ -288,10 +288,7 @@ impl MdnsBrowser {
             }
             let mut received = Vec::new();
             for endpoint in &mut self.sockets {
-                loop {
-                    let Some(datagram) = recv_datagram(endpoint, &mut buffer)? else {
-                        break;
-                    };
+                while let Some(datagram) = recv_datagram(endpoint, &mut buffer)? {
                     let validated = match validate_ingress(datagram.packet, datagram.metadata) {
                         Ok(value) => value,
                         Err(error) => {
@@ -615,10 +612,7 @@ pub fn query_raw(
         check_query_cancellation()?;
         let mut received = false;
         for endpoint in &mut sockets {
-            loop {
-                let Some(datagram) = recv_datagram(endpoint, &mut buffer)? else {
-                    break;
-                };
+            while let Some(datagram) = recv_datagram(endpoint, &mut buffer)? {
                 received = true;
                 let metadata = datagram.metadata;
                 let validated = match validate_ingress(datagram.packet, metadata) {

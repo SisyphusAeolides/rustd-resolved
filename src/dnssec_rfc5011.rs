@@ -411,13 +411,13 @@ impl TrustAnchorManager {
     pub fn revoked_anchor_ids(&self) -> Vec<AnchorId> {
         self.anchors
             .iter()
-            .filter_map(|(id, entry)| {
+            .filter(|(_, entry)| {
                 matches!(
                     entry.state,
                     TrustAnchorState::Revoked | TrustAnchorState::RemoveHoldDown
                 )
-                .then(|| id.clone())
             })
+            .map(|(id, _)| id.clone())
             .collect()
     }
 

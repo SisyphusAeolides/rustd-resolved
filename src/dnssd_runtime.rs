@@ -523,7 +523,7 @@ fn render_name_template(template: &str, host_label: &str) -> Result<Vec<u8>, Dyn
             _ => return Err(DynamicServiceError::InvalidNameTemplate),
         }
     }
-    if output.is_empty() || output.as_bytes().len() > 63 || output.chars().any(char::is_control) {
+    if output.is_empty() || output.len() > 63 || output.chars().any(char::is_control) {
         return Err(DynamicServiceError::InvalidNameTemplate);
     }
     Ok(output.into_bytes())

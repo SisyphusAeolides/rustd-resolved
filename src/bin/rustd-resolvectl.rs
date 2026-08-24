@@ -3,8 +3,6 @@
 use std::process::ExitCode;
 
 mod implementation {
-    include!("rustd_resolvectl_impl.rs");
-
     #[cfg(test)]
     #[allow(private_interfaces)]
     pub(super) type TestLookupOptions<'a> = LookupOptions<'a>;
@@ -16,6 +14,8 @@ mod implementation {
     pub(super) fn entrypoint() -> std::process::ExitCode {
         main()
     }
+
+    include!("rustd_resolvectl_impl.rs");
 }
 
 #[cfg(test)]

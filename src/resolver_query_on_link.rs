@@ -106,8 +106,7 @@
                         == 0,
                 );
                 crate::query_cancel::check()?;
-                let response =
-                    response.map_err(|error| io::Error::new(io::ErrorKind::Other, error))?;
+                let response = response.map_err(io::Error::other)?;
                 if self.routing_generation.load(Ordering::Acquire) != query_generation {
                     return Err(ResolveError::QueryAborted);
                 }

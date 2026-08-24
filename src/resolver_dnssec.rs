@@ -51,7 +51,7 @@ impl Resolver {
         &self,
         server: ServerKey,
         query: &[u8],
-        response: &mut Vec<u8>,
+        response: &mut [u8],
         request_flags: u64,
         budget: &mut DnsAttemptBudget,
     ) -> Result<DnssecVerdict, ResolveError> {

@@ -547,8 +547,7 @@ fn dispatch_cancellable(
         });
         let _ = sender.send(reply);
     }) {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
+        return Err(io::Error::other(
             "Varlink request rejected: executor overloaded",
         ));
     }
@@ -563,8 +562,7 @@ fn dispatch_cancellable(
                 }
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
+                return Err(io::Error::other(
                     "Varlink request worker stopped without a reply",
                 ));
             }
@@ -722,9 +720,9 @@ fn serve_browse_services(stream: &mut UnixStream, request: &Value) -> io::Result
         if stop_requested() || native::socket_disconnected(stream.as_raw_fd())? {
             return Ok(());
         }
-        let updates = browser.poll(Duration::from_millis(250)).map_err(|error| {
-            io::Error::new(io::ErrorKind::Other, format!("mDNS browse failed: {error}"))
-        })?;
+        let updates = browser
+            .poll(Duration::from_millis(250))
+            .map_err(|error| io::Error::other(format!("mDNS browse failed: {error}")))?;
         if updates.is_empty() {
             continue;
         }
@@ -764,13 +762,13 @@ fn validate_parameter_types(parameters: &Value, method: &str) -> Result<(), Valu
                 }
             }
         }
-        "io.rustd.service.SetLogLevel" => {
+        "io.rustd.service.SetLogLevel"
             if !matches!(
                 parameters.get("level"),
                 Some(Value::Null | Value::Number(_))
-            ) {
-                return Err(invalid_parameter("level"));
-            }
+            ) =>
+        {
+            return Err(invalid_parameter("level"))
         }
         _ => {}
     }
