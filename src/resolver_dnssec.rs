@@ -533,6 +533,16 @@ pub(crate) fn verify_packet_rrset(
     rr_type: u16,
     keys: &[wire::ResourceRecord],
 ) -> Result<bool, ResolveError> {
+    verify_packet_rrset_at(packet, owner, rr_type, keys, std::time::SystemTime::now())
+}
+
+fn verify_packet_rrset_at(
+    packet: &[u8],
+    owner: &str,
+    rr_type: u16,
+    keys: &[wire::ResourceRecord],
+    now: std::time::SystemTime,
+) -> Result<bool, ResolveError> {
     let (_, _, records, end) = wire::parse_sections(packet)?;
     if end != packet.len() {
         return Err(WireError::TrailingData.into());
@@ -551,7 +561,7 @@ pub(crate) fn verify_packet_rrset(
         rr_type,
         first.class,
     )? {
-        if verify_rrset_with_keys(packet, signature, &rrset, keys)? {
+        if verify_rrset_with_keys_at(packet, signature, &rrset, keys, now)? {
             return Ok(true);
         }
     }
@@ -564,13 +574,29 @@ pub(crate) fn verify_rrset_with_keys(
     rrset: &[wire::ResourceRecord],
     keys: &[wire::ResourceRecord],
 ) -> Result<bool, ResolveError> {
+    verify_rrset_with_keys_at(
+        packet,
+        signature,
+        rrset,
+        keys,
+        std::time::SystemTime::now(),
+    )
+}
+
+fn verify_rrset_with_keys_at(
+    packet: &[u8],
+    signature: &wire::ResourceRecord,
+    rrset: &[wire::ResourceRecord],
+    keys: &[wire::ResourceRecord],
+    now: std::time::SystemTime,
+) -> Result<bool, ResolveError> {
     for key in keys {
         match crate::dnssec::verify_rrsig(
             packet,
             signature,
             rrset,
             key,
-            std::time::SystemTime::now(),
+            now,
         ) {
             Ok(true) => return Ok(true),
             Ok(false) => {}
@@ -1695,7 +1721,15 @@ mod dnssec_parity_tests {
             .find(|key| wire::dnskey_key_tag(key).ok() == Some(15_211))
             .expect("TEST-75 KSK")
             .clone();
-        assert!(!verify_packet_rrset(&svcb_packet, "svcb.test", 64, &[ksk])
+        let captured_signature_time = std::time::UNIX_EPOCH
+            + std::time::Duration::from_secs(1_787_000_000);
+        assert!(!verify_packet_rrset_at(
+            &svcb_packet,
+            "svcb.test",
+            64,
+            &[ksk],
+            captured_signature_time,
+        )
             .expect("KSK-only verification"));
 
         let trusted = authenticated_zone_signing_keys(&keys).expect("authenticated zone keys");
@@ -1705,7 +1739,13 @@ mod dnssec_parity_tests {
             .collect::<Vec<_>>();
         tags.sort_unstable();
         assert_eq!(tags, vec![14_870, 15_211]);
-        assert!(verify_packet_rrset(&svcb_packet, "svcb.test", 64, &trusted)
+        assert!(verify_packet_rrset_at(
+            &svcb_packet,
+            "svcb.test",
+            64,
+            &trusted,
+            captured_signature_time,
+        )
             .expect("ZSK-backed SVCB verification"));
     }
 
