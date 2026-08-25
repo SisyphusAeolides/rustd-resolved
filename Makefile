@@ -73,6 +73,7 @@ check-packaging:
 	test -f packaging/dbus/org.freedesktop.resolve1.conf; \
 	test -f packaging/polkit/org.freedesktop.resolve1.policy; \
 	grep -Fq 'After=rustd-sysusers.service network-pre.target' packaging/rustd/rustd-resolved.service; \
+	grep -Fq 'Requires=dbus.service' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'ExecStart=/usr/lib/rustd/rustd-resolved --dbus' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'Conflicts=systemd-resolved.service' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'ProtectSystem=strict' packaging/rustd/rustd-resolved.service; \

@@ -4,6 +4,7 @@ Documentation=man:rustd-resolved(8)
 Conflicts=systemd-resolved.service
 After=rustd-sysusers.service network-pre.target
 After=dbus.service
+Requires=dbus.service
 Wants=dbus.service
 Before=network.target nss-lookup.target multi-user.target
 Wants=nss-lookup.target
