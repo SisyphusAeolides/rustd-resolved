@@ -378,11 +378,13 @@ fn monitor(resolver: &Resolver) {
                     if let Err(error) = synchronize(resolver) {
                         eprintln!("rustd-resolved: failed to refresh per-link DNS state: {error}");
                     }
+                    crate::daemon::request_reload();
                 }
                 Ok(false) if Instant::now() >= reopen_at => {
                     if let Err(error) = synchronize(resolver) {
                         eprintln!("rustd-resolved: failed to refresh per-link DNS state: {error}");
                     }
+                    crate::daemon::request_reload();
                     break;
                 }
                 Ok(false) => {}

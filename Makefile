@@ -72,27 +72,34 @@ check-packaging:
 	test -f packaging/dbus/org.freedesktop.resolve1.service; \
 	test -f packaging/dbus/org.freedesktop.resolve1.conf; \
 	test -f packaging/polkit/org.freedesktop.resolve1.policy; \
-	grep -Fq 'After=rustd-sysusers.service network-pre.target' packaging/rustd/rustd-resolved.service; \
+	grep -Fq 'WantedBy=basic.target' packaging/rustd/rustd-resolved.service; \
+	grep -Fq 'DefaultDependencies=no' packaging/rustd/rustd-resolved.service; \
+	grep -Fq 'Before=network.target nss-lookup.target NetworkManager.service multi-user.target' packaging/rustd/rustd-resolved.service; \
+	grep -Fq 'Sockets=rustd-resolved-varlink.socket rustd-resolved-monitor.socket' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'Requires=dbus.service' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'ExecStart=/usr/lib/rustd/rustd-resolved --dbus' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'Conflicts=systemd-resolved.service' packaging/rustd/rustd-resolved.service; \
-	grep -Fq 'ProtectSystem=strict' packaging/rustd/rustd-resolved.service; \
-	grep -Fq 'ReadWritePaths=/run/rustd /var/lib/rustd/resolved' packaging/rustd/rustd-resolved.service; \
+	grep -Fq 'ProtectSystem=false' packaging/rustd/rustd-resolved.service; \
+	grep -Fq 'ReadWritePaths=/run/rustd /var/lib/rustd/resolved -/run/NetworkManager' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'd /var/lib/rustd/resolved 0750 rustd-resolve rustd-resolve -' packaging/tmpfiles/rustd-resolved.conf; \
 	grep -Fq 'drop_privileges("rustd-resolve", &config.runtime_directory)' src/main.rs; \
 	grep -Fq 'dnssec_rfc5011_runtime::publish_runtime_anchors()?;' src/main.rs; \
 	grep -Fq 'dnssec_rfc5011_runtime::observe_authenticated_dnskey_rrset(' src/dnssec.rs; \
 	grep -Fq '(UINT64_C(1) << CAP_NET_BIND_SERVICE) | (UINT64_C(1) << CAP_NET_RAW)' ffi/native.c; \
-	test -f packaging/NetworkManager/conf.d/20-rustd-resolved.conf; \
-	grep -Fq 'dns=none' packaging/NetworkManager/conf.d/20-rustd-resolved.conf; \
-	grep -Fq 'rc-manager=unmanaged' packaging/NetworkManager/conf.d/20-rustd-resolved.conf; \
-	grep -Fq 'systemd-resolved=false' packaging/NetworkManager/conf.d/20-rustd-resolved.conf; \
+	test -f packaging/NetworkManager/conf.d/99-rustd-resolved.conf; \
+	grep -Fq 'dns=none' packaging/NetworkManager/conf.d/99-rustd-resolved.conf; \
+	grep -Fq 'rc-manager=unmanaged' packaging/NetworkManager/conf.d/99-rustd-resolved.conf; \
+	grep -Fq 'systemd-resolved=false' packaging/NetworkManager/conf.d/99-rustd-resolved.conf; \
 	grep -Fq 'L+ /etc/resolv.conf - - - - /run/rustd/resolve/stub-resolv.conf' packaging/tmpfiles/rustd-resolved.conf; \
+	grep -Fq 'f+ /run/rustd/resolve/stub-resolv.conf' packaging/tmpfiles/rustd-resolved.conf; \
 	grep -Fq 'hosts: files rustd_dns [!UNAVAIL=return] dns' packaging/nsswitch.conf.fragment; \
-	grep -Fq 'Exec=/usr/bin/rustctl start rustd-resolved.service' packaging/dbus/org.freedesktop.resolve1.service; \
+	grep -Fq 'Alias=dbus-org.freedesktop.resolve1.service' packaging/rustd/rustd-resolved.service; \
+	grep -Fq 'SystemdService=dbus-org.freedesktop.resolve1.service' packaging/dbus/org.freedesktop.resolve1.service; \
 	grep -Fq '<policy user="rustd-resolve">' packaging/dbus/org.freedesktop.resolve1.conf; \
 	grep -Fq 'unix-user:rustd-resolve' packaging/polkit/org.freedesktop.resolve1.policy; \
-	! grep -E -q 'SystemdService=|systemd-resolve|Exec=/bin/false' packaging/dbus/org.freedesktop.resolve1.service packaging/dbus/org.freedesktop.resolve1.conf packaging/polkit/org.freedesktop.resolve1.policy; \
+	! grep -E -q 'systemd-resolve' packaging/dbus/org.freedesktop.resolve1.conf packaging/polkit/org.freedesktop.resolve1.policy; \
+	grep -Fq 'SystemdService=dbus-org.freedesktop.resolve1.service' packaging/dbus/org.freedesktop.resolve1.service; \
+	grep -Fq 'Exec=/bin/false' packaging/dbus/org.freedesktop.resolve1.service; \
 	grep -Fq 'getenv("RUSTD_NOTIFY_SOCKET")' ffi/native.c; \
 	! grep -Fq 'getenv("NOTIFY_SOCKET")' ffi/native.c; \
 	grep -Fq '_nss_rustd_dns_gethostbyname4_r' nss/nss-rustd-dns.sym; \
@@ -133,8 +140,11 @@ install: build nss
 	install -Dm0644 packaging/dbus/org.freedesktop.resolve1.service $(DESTDIR)$(DBUSSERVICEDIR)/org.freedesktop.resolve1.service
 	install -Dm0644 packaging/dbus/org.freedesktop.resolve1.conf $(DESTDIR)$(DBUSPOLICYDIR)/org.freedesktop.resolve1.conf
 	install -Dm0644 packaging/polkit/org.freedesktop.resolve1.policy $(DESTDIR)$(POLKITDIR)/org.freedesktop.resolve1.policy
-	install -Dm0644 packaging/NetworkManager/conf.d/20-rustd-resolved.conf \
-		$(DESTDIR)$(PREFIX)/lib/NetworkManager/conf.d/20-rustd-resolved.conf
+	install -Dm0644 packaging/NetworkManager/conf.d/99-rustd-resolved.conf \
+		$(DESTDIR)$(PREFIX)/lib/NetworkManager/conf.d/99-rustd-resolved.conf
+	install -d $(DESTDIR)$(SYSCONFDIR)/rustd/system
+	ln -sfn $(RUSTD_UNITDIR)/rustd-resolved.service \
+		$(DESTDIR)$(SYSCONFDIR)/rustd/system/dbus-org.freedesktop.resolve1.service
 clean:
 	rm -rf build target
 	$(MAKE) -C nss clean

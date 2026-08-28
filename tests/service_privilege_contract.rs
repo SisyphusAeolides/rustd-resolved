@@ -35,6 +35,6 @@ fn service_exposes_native_control_with_bounded_resolve1_compatibility() {
     );
 
     let activation = include_str!("../packaging/dbus/org.freedesktop.resolve1.service");
-    assert!(activation.contains("Exec=/usr/bin/rustctl start rustd-resolved.service"));
-    assert!(!activation.contains("SystemdService="));
+    assert!(activation.contains("Exec=/bin/false"));
+    assert!(activation.contains("SystemdService=dbus-org.freedesktop.resolve1.service"));
 }

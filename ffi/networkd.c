@@ -14,6 +14,7 @@
 
 static const char *const watch_paths[] = {
     "/run/rustd/network/links",
+    "/run/NetworkManager",
     "/run/rustd/network",
     "/run/rustd",
     "/run",

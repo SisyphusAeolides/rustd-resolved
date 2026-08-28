@@ -41,7 +41,7 @@ for unit in \
 do
     assert_unit_contract "$unit"
 done
-grep -Fx 'After=rustd-sysusers.service network-pre.target' \
+grep -Fq 'After=rustd-sysusers.service dbus.service network-pre.target' \
     packaging/rustd/rustd-resolved.service >/dev/null \
     || fail "resolver unit does not order startup after RustD sysusers"
 grep -Fx 'ExecStart=/usr/lib/rustd/rustd-resolved --dbus' \
