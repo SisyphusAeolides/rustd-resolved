@@ -6,13 +6,13 @@ The resolver is built from Rust, C, Fortran, Idris, and Agda. It owns DNS stub s
 
 > **Current status (2026-08-24):** the native resolver, packaging, NSS, and
 > compatibility-boundary gates are passing, including the current 541-test
-> Rust validation run. The resolver is included in the RustD Fedora image, and
+> Rust validation run. The resolver is included in the ArachOS image, and
 > artifact inspection confirms the native RustD resolver paths and the absence
 > of the `systemd-resolved` RPM.
 >
 > **Production boundary:** this is not a claim that `rustd-resolved` is a 100%
-> certified, drop-in replacement for `systemd-resolved`. The paired RustD
-> Fedora installation still requires repeated installed-system VM validation
+> certified, drop-in replacement for `systemd-resolved`. The paired ArachOS
+> installation still requires repeated installed-system VM validation
 > covering boot under RustD PID 1, resolver startup/restart, NSS and DNF name
 > resolution, NetworkManager changes, DNSSEC/DNS-over-TLS policy, crash/fault
 > recovery, privilege boundaries, and long-running soak tests after the
@@ -148,7 +148,7 @@ The resolver side of a successful Fedora certificate requires:
   filesystem or rebuilt initramfs.
 
 A resolver source-tree pass is necessary but not sufficient for that claim. The
-paired RustD Fedora full-VM certificate is the installed-system authority.
+paired ArachOS full-VM certificate is the installed-system authority.
 
 ## Production-release boundary
 
