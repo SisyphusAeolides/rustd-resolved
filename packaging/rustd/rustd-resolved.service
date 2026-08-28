@@ -31,6 +31,8 @@ SystemCallArchitectures=native
 ReadWritePaths=/run/rustd /var/lib/rustd/resolved -/run/NetworkManager
 RuntimeDirectory=rustd/resolve
 RuntimeDirectoryMode=0755
+StateDirectory=rustd/resolved
+StateDirectoryMode=0750
 Sockets=rustd-resolved-varlink.socket rustd-resolved-monitor.socket
 
 [Install]
