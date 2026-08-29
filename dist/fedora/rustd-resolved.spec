@@ -85,6 +85,7 @@ make DESTDIR=%{buildroot} \
 %{_datadir}/dbus-1/system.d/org.freedesktop.resolve1.conf
 %{_datadir}/polkit-1/actions/org.freedesktop.resolve1.policy
 %{_prefix}/lib/NetworkManager/conf.d/99-rustd-resolved.conf
+%{_sysconfdir}/rustd/system/dbus-org.freedesktop.resolve1.service
 
 %files nss
 %license LICENSE*
