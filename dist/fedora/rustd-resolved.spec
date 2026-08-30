@@ -5,7 +5,7 @@
 
 Name:           rustd-resolved
 Version:        0.2.3
-Release:        2%{?dist}
+Release:        3%{?dist}
 Summary:        RustD native DNS resolver for Fedora
 License:        LGPL-2.1-or-later
 URL:            https://github.com/SisyphusAeolides/rustd-resolved
@@ -96,6 +96,9 @@ make DESTDIR=%{buildroot} \
 %{_datadir}/rustd-resolved/nsswitch.conf.fragment
 
 %changelog
+* Sun Aug 30 2026 Kenny Glowner <SisyphusAeolides@pm.me> - 0.2.3-3
+- Permit the resolver's bounded runtime-directory ownership transition
+
 * Sun Aug 30 2026 Kenny Glowner <SisyphusAeolides@pm.me> - 0.2.3-2
 - Allow the resolver's audited privilege transition to use CAP_SETPCAP
 - Require RustD system users before resolver activation
