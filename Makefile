@@ -46,7 +46,7 @@ check-native:
 check-rust:
 	cargo fmt --all -- --check
 	cargo clippy --all-targets --all-features --locked -- -D warnings
-	cargo test --all-targets --all-features --locked
+	env -i PATH="$(PATH)" HOME="$(HOME)" CARGO_HOME="$(CARGO_HOME)" RUSTUP_HOME="$(RUSTUP_HOME)" RUSTC_WRAPPER="$(RUSTC_WRAPPER)" CARGO_NET_OFFLINE="$(CARGO_NET_OFFLINE)" cargo test --all-targets --all-features --locked
 
 check-formal:
 	idris2 --build formal/idris/resolved-policy.ipkg
