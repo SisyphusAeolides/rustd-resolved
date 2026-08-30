@@ -1,5 +1,5 @@
 CC ?= cc
-CFLAGS ?= -O2 -g -fPIC -std=c17 -Wall -Wextra -Werror -Wpedantic -fstack-protector-strong -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3
+CFLAGS ?= -O2 -g -fPIC -std=c17 -Wall -Wextra -Werror -Wno-error=cpp -Wpedantic -fstack-protector-strong -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3
 LDFLAGS_SO ?= -shared -Wl,-soname,libnss_rustd_dns.so.2 -Wl,--version-script=nss-rustd-dns.sym -Wl,-z,relro,-z,now
 PREFIX ?= /usr
 LIBDIR ?= $(PREFIX)/lib

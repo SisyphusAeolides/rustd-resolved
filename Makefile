@@ -2,7 +2,7 @@ SHELL := /bin/sh
 CC ?= cc
 undefine FC
 FC ?= gfortran
-CFLAGS ?= -O2 -g -std=c17 -Wall -Wextra -Werror -fstack-protector-strong -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3
+CFLAGS ?= -O2 -g -std=c17 -Wall -Wextra -Werror -Wno-error=cpp -fstack-protector-strong -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3
 FFLAGS ?= -O2 -g -std=f2018 -Wall -Wextra -Werror -fimplicit-none
 LDLIBS ?= -lssl -lcrypto
 PREFIX ?= /usr

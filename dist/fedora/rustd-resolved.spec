@@ -58,12 +58,12 @@ export CARGO_NET_OFFLINE=true
 %check
 export CARGO_NET_OFFLINE=true
 make check-native check-rust check-packaging check-nss
-cc -std=c11 -O1 -g -Wall -Wextra -Werror -Iffi \
+cc -std=c11 -O1 -g -Wall -Wextra -Werror -Wno-error=cpp -Iffi \
    -fsanitize=address,undefined -fno-omit-frame-pointer \
    ffi/test_iouring_dns.c ffi/iouring_dns.c -luring -o /tmp/rustd-resolved-iouring-sanitize
 SR_SKIP_RING=1 ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
 UBSAN_OPTIONS=halt_on_error=1 /tmp/rustd-resolved-iouring-sanitize
-cc -std=c11 -O2 -Wall -Wextra -Werror -Iffi \
+cc -std=c11 -O2 -Wall -Wextra -Werror -Wno-error=cpp -Iffi \
    ffi/test_iouring_dns.c ffi/iouring_dns.c -luring -o /tmp/rustd-resolved-iouring
 /tmp/rustd-resolved-iouring
 
