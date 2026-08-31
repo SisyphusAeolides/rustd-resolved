@@ -10,6 +10,8 @@ BINDIR ?= $(PREFIX)/bin
 LIBDIR ?= $(PREFIX)/lib
 SYSCONFDIR ?= /etc
 DATADIR ?= $(PREFIX)/share
+RUSTUP_TOOLCHAIN ?= 1.74.0
+export RUSTUP_TOOLCHAIN
 NSSWITCHDIR ?= $(DATADIR)/rustd-resolved
 RUSTD_LIBEXECDIR ?= $(PREFIX)/lib/rustd
 RUSTD_UNITDIR ?= $(PREFIX)/lib/rustd/system
@@ -46,7 +48,7 @@ check-native:
 check-rust:
 	cargo fmt --all -- --check
 	cargo clippy --all-targets --all-features --locked -- -D warnings
-	env -i PATH="$(PATH)" HOME="$(HOME)" CARGO_HOME="$(CARGO_HOME)" RUSTUP_HOME="$(RUSTUP_HOME)" RUSTC_WRAPPER="$(RUSTC_WRAPPER)" CARGO_NET_OFFLINE="$(CARGO_NET_OFFLINE)" cargo test --all-targets --all-features --locked
+	env -i PATH="$(PATH)" HOME="$(HOME)" CARGO_HOME="$(CARGO_HOME)" RUSTUP_HOME="$(RUSTUP_HOME)" RUSTUP_TOOLCHAIN="$(RUSTUP_TOOLCHAIN)" RUSTC_WRAPPER="$(RUSTC_WRAPPER)" CARGO_NET_OFFLINE="$(CARGO_NET_OFFLINE)" cargo test --all-targets --all-features --locked
 
 check-formal:
 	idris2 --build formal/idris/resolved-policy.ipkg
