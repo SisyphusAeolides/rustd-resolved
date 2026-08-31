@@ -4,11 +4,23 @@
 
 The resolver is built from Rust, C, Fortran, Idris, and Agda. It owns DNS stub service, upstream transports, cache, split-DNS routing, DNSSEC, DNS-over-TLS, LLMNR, mDNS, DNS-SD, NSS integration, lifecycle handling, and the RustD resolver control plane.
 
-> **Current status (2026-08-24):** the native resolver, packaging, NSS, and
-> compatibility-boundary gates are passing, including the current 541-test
-> Rust validation run. The resolver is included in the ArachOS image, and
-> artifact inspection confirms the native RustD resolver paths and the absence
-> of the `systemd-resolved` RPM.
+In ArachOS, RustD-resolved is the RLC 10.2 resolver managed by RustD on Arach
+Kernel. The integration is complete only after the native daemon, NSS module,
+Varlink, D-Bus, NetworkManager, DNSSEC, and DNS-over-TLS paths pass on the
+installed Arach-Kernel system; source tests alone do not certify that runtime.
+
+Upstream selection includes a deterministic bounded controller composed from
+Lorenz, Mandelbrot, Rössler, logistic-map, Lyapunov, and Duffing dynamics. It
+can adjust server tie-breaking by no more than 12 ms and keeps failure
+cooldowns between 100 ms and 60 seconds. DNS correctness, validation, routing,
+and configured policy remain authoritative.
+
+> **Current status (2026-08-31):** the native resolver, packaging, NSS, and
+> compatibility-boundary gates are passing. The pinned EL10 RPM build completed
+> `%check` with 543 tests passing, and the resulting package passed ArachOS
+> candidate-repository validation. The bounded nonlinear server policy also
+> passes its determinism, limits, and policy-ordering tests. Final runtime
+> certification on Arach Kernel remains an open gate.
 >
 > **Production boundary:** this is not a claim that `rustd-resolved` is a 100%
 > certified, drop-in replacement for `systemd-resolved`. The paired ArachOS
@@ -126,10 +138,11 @@ The `org.freedesktop.resolve1` endpoint is such a boundary: it exists for third-
 
 ## Fedora zero-systemd integration
 
-Fedora 44 is the current integrated cutover certification target together with
-the `rustd` repository. RustD pins an exact RustD-Resolved commit in
-`scripts/rustd-resolved-revision.txt`; Fedora RPM artifacts are built from that
-immutable source pair before the destructive VM conversion.
+Fedora 44 remains a separate zero-systemd compatibility campaign together with
+the `rustd` repository; it is not the ArachOS base. RustD pins an exact
+RustD-Resolved commit in `scripts/rustd-resolved-revision.txt`, and Fedora RPM
+artifacts are built from that immutable source pair before its disposable VM
+conversion. ArachOS on CIQ RLC 10.2 is the current integration authority.
 
 The resolver side of a successful Fedora certificate requires:
 
@@ -158,11 +171,12 @@ The source/build baseline is intentionally strict so those installed-system camp
 
 ## Supported platform
 
-Fedora 44 is the current zero-systemd installed-system certification target.
-Arch Linux and compatible Arch-based distributions remain supported build and
-native-install targets. Neither platform is considered production-certified
-merely because the source compiles; the corresponding installed-system gates
-must pass for the exact release candidate.
+ArachOS on CIQ RLC 10.2 is the current installed-system certification target.
+Fedora 44 remains a separate zero-systemd compatibility campaign, and Arch
+Linux plus compatible Arch-based distributions remain supported build and
+native-install targets. No platform is considered production-certified merely
+because the source compiles; its installed-system gates must pass for the exact
+release candidate.
 
 ## License
 
