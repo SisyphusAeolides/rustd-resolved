@@ -4,10 +4,13 @@
 
 The resolver is built from Rust, C, Fortran, Idris, and Agda. It owns DNS stub service, upstream transports, cache, split-DNS routing, DNSSEC, DNS-over-TLS, LLMNR, mDNS, DNS-SD, NSS integration, lifecycle handling, and the RustD resolver control plane.
 
-In ArachOS, RustD-resolved is the RLC 10.2 resolver managed by RustD on Arach
-Kernel. The integration is complete only after the native daemon, NSS module,
-Varlink, D-Bus, NetworkManager, DNSSEC, and DNS-over-TLS paths pass on the
-installed Arach-Kernel system; source tests alone do not certify that runtime.
+In ArachOS, RustD-resolved is the native resolver managed by RustD on Arach
+Kernel. ArachOS owns the release, RPM repository, and installer composition;
+EL10-compatible packages are used only where an existing RPM/DNF ABI is
+required. The integration is complete only after the native daemon, NSS
+module, Varlink, D-Bus, NetworkManager, DNSSEC, and DNS-over-TLS paths pass on
+the installed Arach-Kernel system; source tests alone do not certify that
+runtime.
 
 Upstream selection includes a deterministic bounded controller composed from
 Lorenz, Mandelbrot, Rössler, logistic-map, Lyapunov, and Duffing dynamics. It
@@ -87,7 +90,7 @@ from replacement-certification artifacts.
 
 Experimental features must still compile cleanly in the all-features CI matrix,
 but incomplete research-only transports are not silently promoted into the
-Fedora production resolver. Moving an experimental feature into the default set
+ArachOS production resolver. Moving an experimental feature into the default set
 requires its own runtime and failure-mode certification first.
 
 ## Build and verification
@@ -136,17 +139,16 @@ Compatibility adapters are allowed only at explicit external boundaries. They mu
 
 The `org.freedesktop.resolve1` endpoint is such a boundary: it exists for third-party clients that speak the established D-Bus ABI, while resolver execution, RustD Varlink, NSS, configuration, packaging, service ownership, and runtime state remain native RustD interfaces.
 
-## Fedora zero-systemd integration
+## ArachOS zero-systemd integration
 
-Fedora 44 remains a separate zero-systemd compatibility campaign together with
-the `rustd` repository; it is not the ArachOS base. RustD pins an exact
-RustD-Resolved commit in `scripts/rustd-resolved-revision.txt`, and Fedora RPM
-artifacts are built from that immutable source pair before its disposable VM
-conversion. ArachOS on CIQ RLC 10.2 is the current integration authority.
+The ArachOS release is a zero-systemd compatibility campaign together with the
+`rustd` repository. RustD pins an exact RustD-Resolved commit in
+`scripts/rustd-resolved-revision.txt`, and ArachOS RPM artifacts are built from
+that immutable source pair before disposable-VM conversion.
 
-The resolver side of a successful Fedora certificate requires:
+The resolver side of a successful ArachOS certificate requires:
 
-- the `rustd-resolved` RPM to conflict with and replace the Fedora resolver
+- the `rustd-resolved` RPM to conflict with and replace the bootstrap resolver
   package rather than coexisting as an untested second resolver;
 - `libnss_rustd_dns.so.2` to service the active authselect-generated hosts NSS
   path after removed NSS backends are deleted;
@@ -171,12 +173,11 @@ The source/build baseline is intentionally strict so those installed-system camp
 
 ## Supported platform
 
-ArachOS on CIQ RLC 10.2 is the current installed-system certification target.
-Fedora 44 remains a separate zero-systemd compatibility campaign, and Arch
-Linux plus compatible Arch-based distributions remain supported build and
-native-install targets. No platform is considered production-certified merely
-because the source compiles; its installed-system gates must pass for the exact
-release candidate.
+ArachOS is the current installed-system certification target. Arch Linux plus
+compatible Arch-based distributions remain supported build and native-install
+targets. No platform is considered production-certified merely because the
+source compiles; its installed-system gates must pass for the exact release
+candidate.
 
 ## License
 
