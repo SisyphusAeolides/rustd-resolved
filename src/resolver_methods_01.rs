@@ -39,6 +39,7 @@ impl Resolver {
             link_dnssec_overrides: RwLock::new(HashMap::new()),
             routing_generation: AtomicU64::new(1),
             inflight: Inflight::default(),
+            chaos_optimizer: Mutex::new(ChaosOptimizer::default()),
             hosts: RwLock::new(hosts),
             next_id: AtomicU16::new(1),
             counters: Counters::default(),
@@ -55,6 +56,15 @@ impl Resolver {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
+    }
+
+    /// Return the current bounded nonlinear scheduling state.
+    #[must_use]
+    pub fn chaos_snapshot(&self) -> crate::chaos_optimizer::ChaosSnapshot {
+        self.chaos_optimizer
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .snapshot()
     }
 
     pub fn global_llmnr_mode(&self) -> SupportMode {

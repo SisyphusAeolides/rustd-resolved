@@ -21,22 +21,30 @@ impl Default for ServerMetric {
 }
 
 pub fn choose_server(metrics: &[ServerMetric]) -> Option<usize> {
+    choose_server_with_bias(metrics, &[])
+}
+
+pub fn choose_server_with_bias(metrics: &[ServerMetric], biases_ms: &[f64]) -> Option<usize> {
     metrics
         .iter()
         .enumerate()
-        .min_by(|(_, left), (_, right)| {
-            score(left)
-                .partial_cmp(&score(right))
+        .min_by(|(left_index, left), (right_index, right)| {
+            score(left, biases_ms.get(*left_index).copied().unwrap_or(0.0))
+                .partial_cmp(&score(
+                    right,
+                    biases_ms.get(*right_index).copied().unwrap_or(0.0),
+                ))
                 .unwrap_or(Ordering::Equal)
         })
         .map(|(index, _)| index)
 }
 
-fn score(metric: &ServerMetric) -> f64 {
+fn score(metric: &ServerMetric, bias_ms: f64) -> f64 {
     f64::from(metric.cooldown_ms.max(0))
         + metric.round_trip_ms.clamp(1.0, 60_000.0)
         + f64::from(metric.failures.max(0)) * 250.0
         - f64::from(metric.feature_level.max(0)) * 5.0
+        + bias_ms.clamp(-12.0, 12.0)
 }
 
 pub fn update_rtt(previous: f64, sample: f64, succeeded: bool) -> f64 {

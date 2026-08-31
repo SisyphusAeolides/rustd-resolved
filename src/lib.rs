@@ -13,6 +13,7 @@ extern crate self as rustd_resolved;
 pub mod bounded_executor;
 pub mod cache;
 pub mod cache_x;
+pub mod chaos_optimizer;
 pub mod config;
 pub mod daemon;
 pub mod dbus;

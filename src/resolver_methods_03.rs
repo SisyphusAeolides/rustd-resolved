@@ -245,15 +245,29 @@ impl Resolver {
                 metric
             })
             .collect();
-        choose_server(&metrics).map(|index| servers[index])
+        drop(states);
+        let optimizer = self
+            .chaos_optimizer
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let biases = servers
+            .iter()
+            .map(|server| optimizer.selection_bias_ms(server.server()))
+            .collect::<Vec<_>>();
+        choose_server_with_bias(&metrics, &biases).map(|index| servers[index])
     }
 
     fn record_success(&self, server: ServerKey, duration: Duration) {
+        let sample_ms = duration.as_secs_f64() * 1000.0;
+        self.chaos_optimizer
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .observe(sample_ms, false);
         let mut states = self.states();
         let state = states.entry(server).or_default();
         state.metric.round_trip_ms = update_rtt(
             state.metric.round_trip_ms,
-            duration.as_secs_f64() * 1000.0,
+            sample_ms,
             true,
         );
         state.metric.failures = 0;
@@ -261,16 +275,28 @@ impl Resolver {
     }
 
     fn record_failure(&self, server: ServerKey, duration: Duration) {
+        let sample_ms = duration.as_secs_f64() * 1000.0;
+        let failures = self
+            .states()
+            .get(&server)
+            .map_or(1, |state| state.metric.failures.saturating_add(1));
+        let delay = {
+            let mut optimizer = self
+                .chaos_optimizer
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            optimizer.observe(sample_ms, true);
+            let exponent = u32::try_from(failures.clamp(0, 8)).unwrap_or(8);
+            optimizer.cooldown_ms(250u64.saturating_mul(1u64 << exponent).min(60_000))
+        };
         let mut states = self.states();
         let state = states.entry(server).or_default();
         state.metric.round_trip_ms = update_rtt(
             state.metric.round_trip_ms,
-            duration.as_secs_f64() * 1000.0,
+            sample_ms,
             false,
         );
         state.metric.failures = state.metric.failures.saturating_add(1);
-        let exponent = u32::try_from(state.metric.failures.clamp(0, 8)).unwrap_or(8);
-        let delay = 250u64.saturating_mul(1u64 << exponent).min(60_000);
         state.cooldown_until = Instant::now().checked_add(Duration::from_millis(delay));
     }
 }

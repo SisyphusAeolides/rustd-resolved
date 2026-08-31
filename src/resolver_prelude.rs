@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 use crate::cache::{Cache, CacheKey};
+use crate::chaos_optimizer::ChaosOptimizer;
 use crate::config::{Config, DnsServerSpec, Domain, SupportMode, TlsMode, ValidationMode};
 use crate::edns::{self, FeatureLevel, ServerFeatureState};
 use crate::hosts::Hosts;
 use crate::native;
 use crate::networkd::LinkState as NetworkdLinkState;
-use crate::policy::{choose_server, update_rtt, ServerMetric};
+use crate::policy::{choose_server_with_bias, update_rtt, ServerMetric};
 use crate::routing::{LinkError, LinkState, RouteScope, RoutingTable, ScopeKind};
 use crate::tls::TlsStream;
 use crate::transport::{ServerTransportState, TransportMode, TRANSPORT_RETRY_ATTEMPTS};
@@ -441,6 +442,7 @@ pub struct Resolver {
     routing_generation: AtomicU64,
     inflight: Inflight,
     cache: Cache,
+    chaos_optimizer: Mutex<ChaosOptimizer>,
     hosts: RwLock<Hosts>,
     next_id: AtomicU16,
     counters: Counters,
