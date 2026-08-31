@@ -5,6 +5,10 @@ fn installed_service_uses_daemon_owned_privilege_drop() {
     let unit = include_str!("../packaging/rustd/rustd-resolved.service");
     assert!(unit.contains("Type=notify"));
     assert!(unit.contains("ExecStart=/usr/lib/rustd/rustd-resolved --dbus"));
+    assert!(unit.contains(
+        "AmbientCapabilities=CAP_CHOWN CAP_SETUID CAP_SETGID CAP_SETPCAP CAP_NET_RAW CAP_NET_BIND_SERVICE"
+    ));
+    assert!(!unit.contains("CAP_FOWNER"));
     assert!(
         !unit.lines().any(|line| line.trim_start().starts_with("User=")),
         "the daemon must start privileged enough to bind DNS sockets and execute its audited internal drop path"

@@ -77,8 +77,9 @@ check-packaging:
 	grep -Fq 'Before=network.target nss-lookup.target NetworkManager.service multi-user.target' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'Sockets=rustd-resolved-varlink.socket rustd-resolved-monitor.socket' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'Requires=dbus.service' packaging/rustd/rustd-resolved.service; \
-	grep -Fq 'AmbientCapabilities=CAP_CHOWN CAP_FOWNER CAP_SETUID CAP_SETGID CAP_SETPCAP CAP_NET_RAW CAP_NET_BIND_SERVICE' packaging/rustd/rustd-resolved.service; \
-	grep -Fq 'CapabilityBoundingSet=CAP_CHOWN CAP_FOWNER CAP_SETUID CAP_SETGID CAP_SETPCAP CAP_NET_RAW CAP_NET_BIND_SERVICE' packaging/rustd/rustd-resolved.service; \
+	grep -Fq 'AmbientCapabilities=CAP_CHOWN CAP_SETUID CAP_SETGID CAP_SETPCAP CAP_NET_RAW CAP_NET_BIND_SERVICE' packaging/rustd/rustd-resolved.service; \
+	grep -Fq 'CapabilityBoundingSet=CAP_CHOWN CAP_SETUID CAP_SETGID CAP_SETPCAP CAP_NET_RAW CAP_NET_BIND_SERVICE' packaging/rustd/rustd-resolved.service; \
+	! grep -Fq 'CAP_FOWNER' packaging/rustd/rustd-resolved.service; \
 	! grep -Fq 'CAP_SYS_ADMIN' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'ExecStart=/usr/lib/rustd/rustd-resolved --dbus' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'Conflicts=systemd-resolved.service' packaging/rustd/rustd-resolved.service; \

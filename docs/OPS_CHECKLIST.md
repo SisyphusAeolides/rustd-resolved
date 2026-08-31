@@ -9,8 +9,9 @@ Use this checklist for native RustD deployments. The authoritative service is
 - [x] The packaged service runs as the `rustd-resolve` account after the daemon
   completes its privileged startup work.
 - [x] The packaged unit grants only the bounded directory/identity transition
-  set plus `CAP_NET_BIND_SERVICE` and `CAP_NET_RAW`; the native drop path
-  removes the transition capabilities before serving DNS.
+  set plus `CAP_NET_BIND_SERVICE` and `CAP_NET_RAW`; the runtime directory is
+  chmodded after ownership is transferred so `CAP_FOWNER` is unnecessary.
+  The native drop path removes the transition capabilities before serving DNS.
 - [x] `tests/direct-root-privilege-drop.sh` verifies the direct-root privilege
   transition, runtime-directory ownership, and retained/bounding capabilities.
 - [x] The native sysusers definition creates the `rustd-resolve` identity.

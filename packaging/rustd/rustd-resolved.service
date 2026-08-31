@@ -19,8 +19,8 @@ LimitNOFILE=524288
 # These transition-only capabilities let the daemon take ownership of the
 # RustD-created runtime/state directories and complete its audited UID/GID
 # change; resolved_drop_privileges() removes them before serving requests.
-AmbientCapabilities=CAP_CHOWN CAP_FOWNER CAP_SETUID CAP_SETGID CAP_SETPCAP CAP_NET_RAW CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_CHOWN CAP_FOWNER CAP_SETUID CAP_SETGID CAP_SETPCAP CAP_NET_RAW CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_CHOWN CAP_SETUID CAP_SETGID CAP_SETPCAP CAP_NET_RAW CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_CHOWN CAP_SETUID CAP_SETGID CAP_SETPCAP CAP_NET_RAW CAP_NET_BIND_SERVICE
 NoNewPrivileges=yes
 ProtectSystem=false
 ProtectHome=false

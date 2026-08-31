@@ -27,10 +27,10 @@ The production resolver performs DNSSEC trust-chain validation, including
 DNSKEY/DS delegation, NSEC/NSEC3 denial, wildcard proofs, trust-anchor
 precedence, authenticated-data marking, and strict/allow-downgrade policy. It
 also drops privileges when launched directly as root. The packaged service
-starts with a short-lived transition set (`CAP_CHOWN`, `CAP_FOWNER`,
-`CAP_SETUID`, `CAP_SETGID`, and `CAP_SETPCAP`) plus the two capabilities needed
-for DNS sockets; the native drop path removes the transition capabilities
-before serving requests.
+starts with a short-lived transition set (`CAP_CHOWN`, `CAP_SETUID`,
+`CAP_SETGID`, and `CAP_SETPCAP`) plus the two capabilities needed for DNS
+sockets; the native drop path removes the transition capabilities before
+serving requests.
 
 Independent DNSSEC edge-case coverage, the full pinned upstream differential
 corpus, and the remaining protocol, lifecycle, installation, and security

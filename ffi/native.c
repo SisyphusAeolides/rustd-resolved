@@ -150,20 +150,15 @@ int resolved_drop_privileges(const char *user, const char *runtime_directory) {
         free(buffer);
         return -ENOTDIR;
     }
-    if (fchown(directory_fd, password.pw_uid, password.pw_gid) < 0 ||
-        fchmod(directory_fd, 0755) < 0) {
+    if (fchown(directory_fd, password.pw_uid, password.pw_gid) < 0) {
         error = -errno;
         (void)close(directory_fd);
         free(buffer);
         return error;
     }
-    if (close(directory_fd) < 0) {
-        error = -errno;
-        free(buffer);
-        return error;
-    }
     if (initgroups(user, password.pw_gid) < 0) {
         error = -errno;
+        (void)close(directory_fd);
         free(buffer);
         return error;
     }
@@ -171,10 +166,22 @@ int resolved_drop_privileges(const char *user, const char *runtime_directory) {
         setresgid(password.pw_gid, password.pw_gid, password.pw_gid) < 0 ||
         setresuid(password.pw_uid, password.pw_uid, password.pw_uid) < 0) {
         error = -errno;
+        (void)close(directory_fd);
         free(buffer);
         return error;
     }
     free(buffer);
+
+    /* The directory is now owned by the target account, so this does not
+     * require CAP_FOWNER in an enforcing SELinux domain. */
+    if (fchmod(directory_fd, 0755) < 0) {
+        error = -errno;
+        (void)close(directory_fd);
+        return error;
+    }
+    if (close(directory_fd) < 0) {
+        return -errno;
+    }
 
     error = set_process_capabilities(transition_capabilities);
     if (error < 0) {
