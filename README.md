@@ -6,8 +6,8 @@ The resolver is built from Rust, C, Fortran, Idris, and Agda. It owns DNS stub s
 
 In ArachOS, RustD-resolved is the native resolver managed by RustD on Arach
 Kernel. ArachOS owns the release, RPM repository, and installer composition;
-EL10-compatible packages are used only where an existing RPM/DNF ABI is
-required. The integration is complete only after the native daemon, NSS
+the bootstrap RPM/DNF package pool is used only where an existing package ABI
+is required. The integration is complete only after the native daemon, NSS
 module, Varlink, D-Bus, NetworkManager, DNSSEC, and DNS-over-TLS paths pass on
 the installed Arach-Kernel system; source tests alone do not certify that
 runtime.
@@ -19,7 +19,7 @@ cooldowns between 100 ms and 60 seconds. DNS correctness, validation, routing,
 and configured policy remain authoritative.
 
 > **Current status (2026-08-31):** the native resolver, packaging, NSS, and
-> compatibility-boundary gates are passing. The pinned EL10 RPM build completed
+> compatibility-boundary gates are passing. The pinned RPM/DNF package build completed
 > `%check` with 543 tests passing, and the resulting package passed ArachOS
 > candidate-repository validation. The bounded nonlinear server policy also
 > passes its determinism, limits, and policy-ordering tests. Final runtime
