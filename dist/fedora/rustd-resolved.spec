@@ -5,7 +5,7 @@
 
 Name:           rustd-resolved
 Version:        0.2.3
-Release:        5%{?dist}
+Release:        6%{?dist}
 Summary:        RustD native DNS resolver for Fedora
 License:        LGPL-2.1-or-later
 URL:            https://github.com/SisyphusAeolides/rustd-resolved
@@ -89,6 +89,9 @@ make DESTDIR=%{buildroot} \
 %{_prefix}/lib/rustd/system/rustd-resolved.service
 %{_prefix}/lib/rustd/system/rustd-resolved-varlink.socket
 %{_prefix}/lib/rustd/system/rustd-resolved-monitor.socket
+%{_prefix}/lib/rustd/system/basic.target.wants/rustd-resolved.service
+%{_prefix}/lib/rustd/system/sockets.target.wants/rustd-resolved-varlink.socket
+%{_prefix}/lib/rustd/system/sockets.target.wants/rustd-resolved-monitor.socket
 %{_prefix}/lib/tmpfiles.d/rustd-resolved.conf
 %{_prefix}/lib/sysusers.d/rustd-resolve.conf
 %{_datadir}/dbus-1/system-services/org.freedesktop.resolve1.service
@@ -103,6 +106,9 @@ make DESTDIR=%{buildroot} \
 %{_datadir}/rustd-resolved/nsswitch.conf.fragment
 
 %changelog
+* Wed Sep 02 2026 Kenny Glauner <SisyphusAeolides@pm.me> - 0.2.3-6
+- Install RustD-native resolver and Varlink socket enablement links
+
 * Wed Sep 02 2026 Kenny Glauner <SisyphusAeolides@pm.me> - 0.2.3-5
 - Keep the libc backend selection active during RPM installation rebuilds
 

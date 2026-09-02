@@ -151,6 +151,18 @@ install: build nss
 	install -d $(DESTDIR)$(SYSCONFDIR)/rustd/system
 	ln -sfn $(RUSTD_UNITDIR)/rustd-resolved.service \
 		$(DESTDIR)$(SYSCONFDIR)/rustd/system/dbus-org.freedesktop.resolve1.service
+	# RustD does not run a systemd preset helper.  Install the resolver's
+	# enablement links with the package so a newly installed stack actually
+	# starts the service and its Varlink listeners on the next RustD boot.
+	install -d \
+		$(DESTDIR)$(RUSTD_UNITDIR)/basic.target.wants \
+		$(DESTDIR)$(RUSTD_UNITDIR)/sockets.target.wants
+	ln -sfn ../rustd-resolved.service \
+		$(DESTDIR)$(RUSTD_UNITDIR)/basic.target.wants/rustd-resolved.service
+	ln -sfn ../rustd-resolved-varlink.socket \
+		$(DESTDIR)$(RUSTD_UNITDIR)/sockets.target.wants/rustd-resolved-varlink.socket
+	ln -sfn ../rustd-resolved-monitor.socket \
+		$(DESTDIR)$(RUSTD_UNITDIR)/sockets.target.wants/rustd-resolved-monitor.socket
 clean:
 	rm -rf build target
 	$(MAKE) -C nss clean
