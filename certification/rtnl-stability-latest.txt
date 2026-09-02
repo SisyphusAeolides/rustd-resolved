@@ -1,6 +1,6 @@
 schema=rustd-resolved-rtnl-stability-v1
 status=pass
-tested_base_sha=b2612e655327d576f79ca087b61f00710c1eec87
+tested_base_sha=7f4774c6234293e277df0c66be638576440bbc58
 raw_rtnetlink=pass
 debounced_reconciliation=pass
 two_sample_confirmation=pass
