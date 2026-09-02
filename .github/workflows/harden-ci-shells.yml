@@ -1,66 +1,33 @@
 name: Harden CI shell execution
-# final rerun after resolver safety changes
-
-defaults:
-  run:
-    shell: 'bash --noprofile --norc -euo pipefail {0}'
 
 on:
   push:
     branches: [main]
     paths:
-      - .github/workflows/harden-ci-shells.yml
+      - .github/workflows/**
       - scripts/check-ci-shell-safety.py
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: harden-ci-shells
   cancel-in-progress: false
 
+defaults:
+  run:
+    shell: 'bash --noprofile --norc -euo pipefail {0}'
+
 jobs:
-  harden:
+  validate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          fetch-depth: 0
 
-      - name: Apply strict bash policy repository-wide
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends python3-yaml
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          import yaml
+      - name: Verify strict shell policy
+        run: python3 scripts/check-ci-shell-safety.py
 
-          strict = "defaults:\n  run:\n    shell: 'bash --noprofile --norc -euo pipefail {0}'\n\n"
-          root = Path('.github/workflows')
-          for path in sorted(root.glob('*.yml')):
-              text = path.read_text(encoding='utf-8')
-              text = re.sub(r'(?m)^\s*shell:\s*bash\s*\n', '', text)
-              if not re.search(r'(?m)^defaults:\s*$', text):
-                  lines = text.splitlines(keepends=True)
-                  if not lines or not lines[0].startswith('name:'):
-                      raise SystemExit(f'{path}: expected name as first key')
-                  text = lines[0] + '\n' + strict + ''.join(lines[1:])
-              path.write_text(text, encoding='utf-8')
-              yaml.safe_load(text)
-          PY
-          python3 scripts/check-ci-shell-safety.py
-          git diff --check
-          git fetch origin main
-          git rebase --autostash origin/main
-          python3 scripts/check-ci-shell-safety.py
-          git add .github/workflows scripts/check-ci-shell-safety.py
-          git diff --cached --check
-          if git diff --cached --quiet; then
-            exit 0
-          fi
-          git config user.name 'Kenny Glauner'
-          git config user.email 'SisyphusAeolides@pm.me'
-          git commit -m 'Enforce strict CI shell execution'
-          git push origin HEAD:main
+      - name: Verify workflow text has no whitespace errors
+        run: git diff --check

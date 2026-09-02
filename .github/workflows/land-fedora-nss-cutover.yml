@@ -1,55 +1,35 @@
 name: Land Fedora NSS cutover contract
-# trigger
 
 on:
   push:
     branches: [main]
     paths:
       - .github/workflows/land-fedora-nss-cutover.yml
+      - .github/workflows/final-release-closure.yml
+      - Makefile
+      - packaging/nsswitch.conf.fragment
+      - tests/rustd_naming.rs
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+defaults:
+  run:
+    shell: 'bash --noprofile --norc -euo pipefail {0}'
 
 jobs:
-  land:
+  validate:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          fetch-depth: 0
-      - name: Install native build dependencies
-        shell: 'bash --noprofile --norc -euo pipefail {0}'
+
+      - name: Verify systemd-free NSS contract
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends \
-            build-essential pkg-config libssl-dev liburing-dev python3
-      - name: Update NSS packaging assertions
-        shell: 'bash --noprofile --norc -euo pipefail {0}'
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          old = "hosts: files myhostname rustd_dns [!UNAVAIL=return] dns"
-          new = "hosts: files rustd_dns [!UNAVAIL=return] dns"
-          for path in [Path('Makefile'), Path('.github/workflows/final-release-closure.yml')]:
-              text = path.read_text()
-              if old in text:
-                  text = text.replace(old, new)
-              elif new not in text:
-                  raise SystemExit(f'NSS contract preimage missing in {path}')
-              path.write_text(text)
-          PY
-          grep -Fq 'hosts: files rustd_dns [!UNAVAIL=return] dns' packaging/nsswitch.conf.fragment
+          grep -Fqx 'hosts: files rustd_dns [!UNAVAIL=return] dns' packaging/nsswitch.conf.fragment
           ! grep -Fq 'myhostname' packaging/nsswitch.conf.fragment
+          grep -Fq 'hosts: files rustd_dns [!UNAVAIL=return] dns' Makefile
+          grep -Fq 'hosts: files rustd_dns [!UNAVAIL=return] dns' .github/workflows/final-release-closure.yml
           cargo test --locked --test rustd_naming
           make check-packaging
-          git diff --check
-          git fetch origin main
-          git rebase --autostash origin/main
-          git add -A Makefile .github/workflows/final-release-closure.yml \
-            packaging/nsswitch.conf.fragment tests/rustd_naming.rs \
-            .github/workflows/land-fedora-nss-cutover.yml
-          git diff --cached --check
-          git config user.name 'Kenny Glauner'
-          git config user.email 'SisyphusAeolides@pm.me'
-          git commit -m 'Make Fedora NSS cutover systemd-libs free'
-          git push origin HEAD:main

@@ -1,5 +1,10 @@
 name: Certification evidence hardening
 
+defaults:
+  run:
+    shell: 'bash --noprofile --norc -euo pipefail {0}'
+
+
 on:
   push:
     branches:
@@ -22,7 +27,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Validate certification evidence handling
-        shell: bash
         run: |
           set -euo pipefail
           python3 -m py_compile \

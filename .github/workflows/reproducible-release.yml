@@ -1,4 +1,9 @@
 name: Reproducible native release
+
+defaults:
+  run:
+    shell: 'bash --noprofile --norc -euo pipefail {0}'
+
 run-name: Reproducible native release ${{ inputs.source_sha || github.sha }}
 
 on:
@@ -28,7 +33,6 @@ jobs:
           fetch-depth: 1
 
       - name: Verify exact source identity
-        shell: bash
         env:
           REQUESTED_SHA: ${{ inputs.source_sha || github.sha }}
         run: |
@@ -37,7 +41,6 @@ jobs:
           test "$(git rev-parse HEAD)" = "$REQUESTED_SHA"
 
       - name: Install Rust 1.74 and native build dependencies
-        shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
@@ -48,7 +51,6 @@ jobs:
           cargo --version --verbose
 
       - name: Build and compare native release twice
-        shell: bash
         run: bash scripts/build-reproducible-release.sh
 
       - name: Upload native reproducible release

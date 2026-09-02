@@ -1,5 +1,10 @@
 name: Release integrity
 
+defaults:
+  run:
+    shell: 'bash --noprofile --norc -euo pipefail {0}'
+
+
 on:
   push:
     branches:
@@ -21,7 +26,6 @@ jobs:
           fetch-depth: 0
 
       - name: Validate repository policy
-        shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -69,7 +73,6 @@ jobs:
         if: ${{ github.event_name == 'push' }}
         env:
           GH_TOKEN: ${{ github.token }}
-        shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'

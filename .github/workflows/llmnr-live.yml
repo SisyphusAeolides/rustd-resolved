@@ -1,5 +1,10 @@
 name: Live LLMNR resolver and responder verification
 
+defaults:
+  run:
+    shell: 'bash --noprofile --norc -euo pipefail {0}'
+
+
 on:
   push:
     branches:

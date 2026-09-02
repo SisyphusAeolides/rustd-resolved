@@ -1,5 +1,10 @@
 name: multiarch-smoke
 
+defaults:
+  run:
+    shell: 'bash --noprofile --norc -euo pipefail {0}'
+
+
 on:
   push:
   pull_request:

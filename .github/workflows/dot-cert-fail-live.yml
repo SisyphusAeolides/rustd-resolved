@@ -1,5 +1,10 @@
 name: Live strict DoT certificate failure
 
+defaults:
+  run:
+    shell: 'bash --noprofile --norc -euo pipefail {0}'
+
+
 on:
   push:
     branches:
@@ -22,7 +27,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install native dependencies
-        shell: bash
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
@@ -32,13 +36,11 @@ jobs:
             gfortran libssl-dev liburing-dev openssl
 
       - name: Build resolver
-        shell: bash
         run: |
           set -euo pipefail
           cargo build --release --locked --bin rustd-resolved
 
       - name: Run live strict DoT certificate failure campaign
-        shell: bash
         run: |
           set -euo pipefail
           evidence=/tmp/rustd-dot-cert-fail-ci.jsonl

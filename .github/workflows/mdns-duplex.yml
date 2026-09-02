@@ -1,5 +1,10 @@
 name: Live simultaneous mDNS resolver and responder
 
+defaults:
+  run:
+    shell: 'bash --noprofile --norc -euo pipefail {0}'
+
+
 on:
   push:
     branches:

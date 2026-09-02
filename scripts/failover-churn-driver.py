@@ -167,7 +167,9 @@ def run(options: argparse.Namespace) -> int:
                             )
                         if current.queries <= before_current:
                             raise RuntimeError(
-                                f"cycle {cycle} did not exercise the newly blackholed last-good upstream"
+                                f"cycle {cycle} did not exercise the newly blackholed last-good upstream "
+                                f"(blackhole={current.queries}/{before_current}, "
+                                f"peer={peer.queries}/{before_peer}, protocol={protocol})"
                             )
                         if peer.queries <= before_peer:
                             raise RuntimeError(

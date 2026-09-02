@@ -1,5 +1,10 @@
 name: Build and test
 
+defaults:
+  run:
+    shell: 'bash --noprofile --norc -euo pipefail {0}'
+
+
 on:
   push:
     branches:
@@ -30,14 +35,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install native and D-Bus tools
-        shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends dbus gfortran libssl-dev liburing-dev openssl python3 python3-dbus python3-gi python3-yaml
 
       - name: Install Rust toolchain
-        shell: bash
         run: |
           set -euo pipefail
           rustup toolchain install "${{ matrix.toolchain }}" --profile minimal --component rustfmt,clippy
@@ -46,33 +49,28 @@ jobs:
           rustup show active-toolchain
 
       - name: Check native ABI
-        shell: bash
         run: |
           set -euo pipefail
           make check-native
 
       - name: Check RustD packaging
-        shell: bash
         run: |
           set -euo pipefail
           make check-packaging
 
       - name: Check NSS integration
         if: ${{ matrix.toolchain == 'stable' }}
-        shell: bash
         run: |
           set -euo pipefail
           make check-nss
 
       - name: Canonicalize Rust source
-        shell: bash
         run: |
           set -euo pipefail
           cargo fmt --all
 
       - name: Package canonical source snapshot
         if: ${{ matrix.toolchain == 'stable' }}
-        shell: bash
         run: |
           set -euo pipefail
           tar \
@@ -94,13 +92,11 @@ jobs:
           retention-days: 14
 
       - name: Check formatting
-        shell: bash
         run: |
           set -euo pipefail
           git diff --exit-code -- src
 
       - name: Run production Clippy
-        shell: bash
         run: |
           set -euo pipefail
           cargo clippy --all-targets --locked -- \
@@ -111,7 +107,6 @@ jobs:
             -D unused_must_use 2>&1 | tee /tmp/clippy.log
 
       - name: Run all-feature correctness sweep
-        shell: bash
         run: |
           set -euo pipefail
           cargo clippy --all-targets --all-features --locked -- \
@@ -131,13 +126,11 @@ jobs:
           retention-days: 1
 
       - name: Run tests
-        shell: bash
         run: |
           set -euo pipefail
           cargo test --all-targets --all-features --locked
 
       - name: Repeat transaction coalescing regression
-        shell: bash
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
@@ -145,7 +138,6 @@ jobs:
           done
 
       - name: Repeat cross-transaction redirect regressions
-        shell: bash
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
@@ -153,7 +145,6 @@ jobs:
           done
 
       - name: Repeat EDNS downgrade regressions
-        shell: bash
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
@@ -161,7 +152,6 @@ jobs:
           done
 
       - name: Repeat transport fallback regressions
-        shell: bash
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
@@ -169,7 +159,6 @@ jobs:
           done
 
       - name: Repeat root RRSIG regressions
-        shell: bash
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
@@ -177,14 +166,12 @@ jobs:
           done
 
       - name: Build release binaries
-        shell: bash
         run: |
           set -euo pipefail
           cargo build --release --locked
 
       - name: Check direct root privilege drop
         if: ${{ matrix.toolchain == 'stable' }}
-        shell: bash
         run: |
           set -euo pipefail
           evidence=/tmp/rustd-resolver-privilege-ci.jsonl
@@ -221,14 +208,12 @@ jobs:
 
       - name: Check live DNS and Varlink path
         if: ${{ matrix.toolchain == 'stable' }}
-        shell: bash
         run: |
           set -euo pipefail
           python3 tests/live-dns.py target/release/rustd-resolved target/release/rustd-resolvectl
 
       - name: Check live D-Bus contracts
         if: ${{ matrix.toolchain == 'stable' }}
-        shell: bash
         run: |
           set -euo pipefail
           bash tests/dbus-introspection.sh target/release/rustd-resolved target/release/rustd-resolvectl
@@ -245,7 +230,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install formal toolchain dependencies
-        shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
@@ -260,7 +244,6 @@ jobs:
 
       - name: Bootstrap pinned Idris 2
         if: ${{ steps.idris-cache.outputs.cache-hit != 'true' }}
-        shell: bash
         run: |
           set -euo pipefail
           rm -rf /tmp/Idris2
@@ -269,7 +252,6 @@ jobs:
           make -C /tmp/Idris2 install PREFIX="$HOME/.idris2"
 
       - name: Verify pinned formal compilers
-        shell: bash
         run: |
           set -euo pipefail
           echo "$HOME/.idris2/bin" >> "$GITHUB_PATH"
@@ -277,7 +259,6 @@ jobs:
           agda --version | grep '2.6.3'
 
       - name: Check Idris and Agda models
-        shell: bash
         run: |
           set -euo pipefail
           export PATH="$HOME/.idris2/bin:$PATH"
