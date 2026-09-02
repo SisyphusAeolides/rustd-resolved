@@ -53,10 +53,16 @@ test -f certification/rfc5011-rollover-latest.txt
 
 %build
 export CARGO_NET_OFFLINE=true
+# RPM's build macros provide RUSTFLAGS explicitly, which takes precedence over
+# .cargo/config.toml. Keep the libc backend selection from that config active
+# on current nightlies: rustix 0.37's linux_raw backend relies on reserved
+# rustc_* attributes that newer compilers reject.
+export RUSTFLAGS="${RUSTFLAGS:-} --cfg rustix_use_libc"
 %make_build build nss
 
 %check
 export CARGO_NET_OFFLINE=true
+export RUSTFLAGS="${RUSTFLAGS:-} --cfg rustix_use_libc"
 make check-native check-rust check-packaging check-nss
 cc -std=c11 -O1 -g -Wall -Wextra -Werror -Wno-error=cpp -Iffi \
    -fsanitize=address,undefined -fno-omit-frame-pointer \
