@@ -5,7 +5,7 @@
 
 Name:           rustd-resolved
 Version:        0.2.3
-Release:        4%{?dist}
+Release:        5%{?dist}
 Summary:        RustD native DNS resolver for Fedora
 License:        LGPL-2.1-or-later
 URL:            https://github.com/SisyphusAeolides/rustd-resolved
@@ -74,6 +74,7 @@ cc -std=c11 -O2 -Wall -Wextra -Werror -Wno-error=cpp -Iffi \
 /tmp/rustd-resolved-iouring
 
 %install
+export RUSTFLAGS="${RUSTFLAGS:-} --cfg rustix_use_libc"
 make DESTDIR=%{buildroot} \
      PREFIX=%{_prefix} \
      LIBDIR=%{_libdir} \
@@ -102,6 +103,9 @@ make DESTDIR=%{buildroot} \
 %{_datadir}/rustd-resolved/nsswitch.conf.fragment
 
 %changelog
+* Wed Sep 02 2026 Kenny Glauner <SisyphusAeolides@pm.me> - 0.2.3-5
+- Keep the libc backend selection active during RPM installation rebuilds
+
 * Sun Aug 30 2026 Kenny Glowner <SisyphusAeolides@pm.me> - 0.2.3-4
 - Avoid CAP_FOWNER by chmodding the resolver runtime directory after ownership transition
 
