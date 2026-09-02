@@ -1,32 +1,189 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-use crate::daemon::{request_stop, stop_requested};
+use crate::daemon::stop_requested;
 use crate::native;
 use crate::resolver::Resolver;
 use crate::routing::KernelLinkState;
+use std::collections::BTreeMap;
 use std::io;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::os::unix::net::UnixDatagram;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-const RTNL_POLL_INTERVAL: Duration = Duration::from_millis(250);
+const RTNL_POLL_INTERVAL: Duration = Duration::from_millis(100);
+const RTNL_EVENT_QUIET: Duration = Duration::from_millis(175);
+const RTNL_STATE_CONFIRMATION: Duration = Duration::from_millis(350);
+const RTNL_PERIODIC_RECONCILE: Duration = Duration::from_secs(30);
+const RTNL_INITIAL_BACKOFF: Duration = Duration::from_millis(250);
+const RTNL_MAX_BACKOFF: Duration = Duration::from_secs(30);
+const DHCP_RENEW_MIN_INTERVAL: Duration = Duration::from_secs(30);
+const DEFAULT_DHCP_RENEW_SOCKET: &str = "/run/rustd/network/dhcp-renew.sock";
 
-pub fn synchronize(resolver: &Resolver) -> io::Result<()> {
-    let snapshot = native::link_snapshot()?;
-    if std::env::var_os("RUSTD_RESOLVED_QUERY_DIAGNOSTICS").is_some() {
-        for link in &snapshot {
-            eprintln!(
-                "rustd-resolved: kernel link {} ({}) flags={:#x} operstate={} ipv4-global={} ipv6-global={}",
-                link.ifindex,
-                link.ifname,
-                link.flags,
-                link.operstate,
-                link.has_ipv4_global,
-                link.has_ipv6_global
-            );
+const IFF_UP: u32 = 0x0001;
+const IFF_RUNNING: u32 = 0x0040;
+const IFF_LOWER_UP: u32 = 0x1_0000;
+const IFF_DORMANT: u32 = 0x2_0000;
+const IF_OPER_UNKNOWN: u8 = 0;
+const IF_OPER_UP: u8 = 6;
+
+#[derive(Clone, Debug)]
+struct Candidate {
+    links: BTreeMap<i32, KernelLinkState>,
+    first_seen: Instant,
+    observations: u8,
+}
+
+#[derive(Debug, Default)]
+struct LinkTracker {
+    initialized: bool,
+    stable: BTreeMap<i32, KernelLinkState>,
+    candidate: Option<Candidate>,
+}
+
+#[derive(Debug)]
+enum Decision {
+    Unchanged,
+    ConfirmAfter(Duration),
+    Publish {
+        previous: BTreeMap<i32, KernelLinkState>,
+        current: Vec<KernelLinkState>,
+    },
+}
+
+impl LinkTracker {
+    fn observe(&mut self, links: Vec<KernelLinkState>, now: Instant) -> Decision {
+        let incoming = links
+            .into_iter()
+            .map(|link| (link.ifindex, link))
+            .collect::<BTreeMap<_, _>>();
+
+        if !self.initialized {
+            self.initialized = true;
+            let previous = std::mem::replace(&mut self.stable, incoming);
+            self.candidate = None;
+            return Decision::Publish {
+                previous,
+                current: self.stable.values().cloned().collect(),
+            };
+        }
+        if incoming == self.stable {
+            self.candidate = None;
+            return Decision::Unchanged;
+        }
+
+        if let Some(candidate) = self.candidate.as_mut() {
+            if candidate.links == incoming {
+                candidate.observations = candidate.observations.saturating_add(1);
+                let elapsed = now.saturating_duration_since(candidate.first_seen);
+                if candidate.observations >= 2 && elapsed >= RTNL_STATE_CONFIRMATION {
+                    let previous = std::mem::replace(&mut self.stable, incoming);
+                    self.candidate = None;
+                    return Decision::Publish {
+                        previous,
+                        current: self.stable.values().cloned().collect(),
+                    };
+                }
+                return Decision::ConfirmAfter(RTNL_STATE_CONFIRMATION.saturating_sub(elapsed));
+            }
+        }
+
+        self.candidate = Some(Candidate {
+            links: incoming,
+            first_seen: now,
+            observations: 1,
+        });
+        Decision::ConfirmAfter(RTNL_STATE_CONFIRMATION)
+    }
+}
+
+#[derive(Debug, Default)]
+struct DhcpRenewalCoordinator {
+    socket: Option<PathBuf>,
+    last_request: BTreeMap<i32, Instant>,
+}
+
+impl DhcpRenewalCoordinator {
+    fn discover() -> Self {
+        let configured = std::env::var_os("RUSTD_RESOLVED_DHCP_RENEW_SOCKET").map(PathBuf::from);
+        let default = PathBuf::from(DEFAULT_DHCP_RENEW_SOCKET);
+        Self {
+            socket: configured.or_else(|| default.exists().then_some(default)),
+            last_request: BTreeMap::new(),
         }
     }
-    let links = snapshot
+
+    fn transitions(
+        &mut self,
+        previous: &BTreeMap<i32, KernelLinkState>,
+        current: &[KernelLinkState],
+        now: Instant,
+    ) {
+        let Some(path) = self.socket.clone() else {
+            return;
+        };
+        for link in current {
+            if !renewal_transition(previous.get(&link.ifindex), link) {
+                continue;
+            }
+            if self
+                .last_request
+                .get(&link.ifindex)
+                .is_some_and(|last| now.saturating_duration_since(*last) < DHCP_RENEW_MIN_INTERVAL)
+            {
+                continue;
+            }
+            let payload = format!(
+                "RUSTD_DHCP_RENEW=1\nIFINDEX={}\nIFNAME={}\nFAMILY=any\n",
+                link.ifindex, link.ifname
+            );
+            match UnixDatagram::unbound()
+                .and_then(|socket| socket.send_to(payload.as_bytes(), &path))
+            {
+                Ok(_) => {
+                    self.last_request.insert(link.ifindex, now);
+                }
+                Err(error)
+                    if matches!(
+                        error.kind(),
+                        io::ErrorKind::NotFound | io::ErrorKind::ConnectionRefused
+                    ) =>
+                {
+                    self.socket = None;
+                    return;
+                }
+                Err(error) => eprintln!(
+                    "rustd-resolved: failed to request DHCP renewal for {}: {error}",
+                    link.ifname
+                ),
+            }
+        }
+    }
+}
+
+fn renewal_transition(previous: Option<&KernelLinkState>, current: &KernelLinkState) -> bool {
+    if !has_carrier(current) || current.has_ipv4_global || current.has_ipv6_global {
+        return false;
+    }
+    previous.map_or(true, |old| {
+        !has_carrier(old) || old.has_ipv4_global || old.has_ipv6_global
+    })
+}
+
+fn has_carrier(link: &KernelLinkState) -> bool {
+    if link.flags & IFF_UP == 0 || link.flags & IFF_DORMANT != 0 {
+        return false;
+    }
+    if link.operstate == IF_OPER_UP {
+        return true;
+    }
+    link.operstate == IF_OPER_UNKNOWN
+        && link.flags & (IFF_LOWER_UP | IFF_RUNNING) == (IFF_LOWER_UP | IFF_RUNNING)
+}
+
+fn kernel_snapshot() -> io::Result<Vec<KernelLinkState>> {
+    Ok(native::link_snapshot()?
         .into_iter()
         .map(|link| KernelLinkState {
             ifindex: link.ifindex,
@@ -39,37 +196,141 @@ pub fn synchronize(resolver: &Resolver) -> io::Result<()> {
             has_ipv6_global: link.has_ipv6_global,
             has_ipv6_link_local: link.has_ipv6_link_local,
         })
-        .collect();
+        .collect())
+}
+
+fn publish(resolver: &Resolver, links: Vec<KernelLinkState>) -> io::Result<()> {
+    if std::env::var_os("RUSTD_RESOLVED_QUERY_DIAGNOSTICS").is_some() {
+        for link in &links {
+            eprintln!(
+                "rustd-resolved: stable kernel link {} ({}) flags={:#x} operstate={} ipv4-global={} ipv6-global={}",
+                link.ifindex,
+                link.ifname,
+                link.flags,
+                link.operstate,
+                link.has_ipv4_global,
+                link.has_ipv6_global
+            );
+        }
+    }
     resolver
         .sync_kernel_links(links)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
 }
 
-pub fn spawn(resolver: Arc<Resolver>) -> io::Result<JoinHandle<()>> {
-    synchronize(&resolver)?;
-    let fd = native::rtnl_open()?;
-    // SAFETY: rtnl_open returns a fresh owned descriptor on success.
-    let fd = unsafe { OwnedFd::from_raw_fd(fd) };
-    thread::Builder::new()
-        .name("resolved-rtnl".to_owned())
-        .spawn(move || monitor(&resolver, &fd))
+pub fn synchronize(resolver: &Resolver) -> io::Result<()> {
+    publish(resolver, kernel_snapshot()?)
 }
 
-fn monitor(resolver: &Resolver, fd: &OwnedFd) {
-    while !stop_requested() {
-        match native::rtnl_wait(fd.as_raw_fd(), RTNL_POLL_INTERVAL) {
-            Ok(true) => {
-                if let Err(error) = synchronize(resolver) {
-                    eprintln!("rustd-resolved: failed to refresh kernel link state: {error}");
+pub fn spawn(resolver: Arc<Resolver>) -> io::Result<JoinHandle<()>> {
+    let mut tracker = LinkTracker::default();
+    let mut renewals = DhcpRenewalCoordinator::discover();
+    match kernel_snapshot() {
+        Ok(snapshot) => match tracker.observe(snapshot, Instant::now()) {
+            Decision::Publish { previous, current } => {
+                if let Err(error) = publish(&resolver, current.clone()) {
+                    eprintln!("rustd-resolved: initial kernel link state unavailable: {error}");
+                } else {
+                    renewals.transitions(&previous, &current, Instant::now());
                 }
             }
-            Ok(false) => {}
+            Decision::Unchanged | Decision::ConfirmAfter(_) => {}
+        },
+        Err(error) => {
+            eprintln!("rustd-resolved: initial kernel link snapshot unavailable: {error}");
+        }
+    }
+    thread::Builder::new()
+        .name("resolved-rtnl".to_owned())
+        .spawn(move || monitor(&resolver, tracker, renewals))
+}
+
+fn monitor(resolver: &Resolver, mut tracker: LinkTracker, mut renewals: DhcpRenewalCoordinator) {
+    let mut reopen_backoff = RTNL_INITIAL_BACKOFF;
+    let mut next_sample = (!tracker.initialized).then_some(Instant::now());
+    while !stop_requested() {
+        let fd = match native::rtnl_open() {
+            Ok(fd) => fd,
             Err(error) => {
-                eprintln!("rustd-resolved: RTNL monitoring failed: {error}");
-                request_stop();
-                break;
+                eprintln!(
+                    "rustd-resolved: RTNL socket unavailable, retrying in {:?}: {error}",
+                    reopen_backoff
+                );
+                sleep_interruptibly(reopen_backoff);
+                reopen_backoff = reopen_backoff.saturating_mul(2).min(RTNL_MAX_BACKOFF);
+                continue;
+            }
+        };
+        reopen_backoff = RTNL_INITIAL_BACKOFF;
+        // SAFETY: rtnl_open returns a fresh owned descriptor on success.
+        let fd = unsafe { OwnedFd::from_raw_fd(fd) };
+        let mut periodic_at = Instant::now() + RTNL_PERIODIC_RECONCILE;
+
+        loop {
+            if stop_requested() {
+                return;
+            }
+            match native::rtnl_wait(fd.as_raw_fd(), RTNL_POLL_INTERVAL) {
+                Ok(true) => {
+                    next_sample = Some(Instant::now() + RTNL_EVENT_QUIET);
+                }
+                Ok(false) => {}
+                Err(error) => {
+                    eprintln!(
+                        "rustd-resolved: RTNL monitor disconnected, reopening without stopping DNS: {error}"
+                    );
+                    break;
+                }
+            }
+
+            let now = Instant::now();
+            if now >= periodic_at {
+                next_sample = Some(now);
+                periodic_at = now + RTNL_PERIODIC_RECONCILE;
+            }
+            if next_sample.is_some_and(|deadline| now >= deadline) {
+                match kernel_snapshot() {
+                    Ok(snapshot) => match tracker.observe(snapshot, now) {
+                        Decision::Unchanged => next_sample = None,
+                        Decision::ConfirmAfter(delay) => {
+                            next_sample = Some(now + delay.max(RTNL_POLL_INTERVAL));
+                        }
+                        Decision::Publish { previous, current } => {
+                            match publish(resolver, current.clone()) {
+                                Ok(()) => {
+                                    renewals.transitions(&previous, &current, now);
+                                    next_sample = None;
+                                }
+                                Err(error) => {
+                                    eprintln!(
+                                        "rustd-resolved: failed to publish stable kernel link state: {error}"
+                                    );
+                                    next_sample = Some(now + RTNL_INITIAL_BACKOFF);
+                                }
+                            }
+                        }
+                    },
+                    Err(error) => {
+                        eprintln!(
+                            "rustd-resolved: kernel link snapshot failed, retaining the last stable state: {error}"
+                        );
+                        next_sample = Some(now + reopen_backoff);
+                        reopen_backoff = reopen_backoff.saturating_mul(2).min(RTNL_MAX_BACKOFF);
+                    }
+                }
             }
         }
+    }
+}
+
+fn sleep_interruptibly(duration: Duration) {
+    let deadline = Instant::now() + duration;
+    while !stop_requested() {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            break;
+        }
+        thread::sleep(remaining.min(RTNL_POLL_INTERVAL));
     }
 }
 
@@ -77,6 +338,20 @@ fn monitor(resolver: &Resolver, fd: &OwnedFd) {
 mod tests {
     use super::*;
     use crate::config::Config;
+
+    fn link(flags: u32, operstate: u8, ipv4: bool) -> KernelLinkState {
+        KernelLinkState {
+            ifindex: 7,
+            ifname: "test0".to_owned(),
+            flags,
+            mtu: 1500,
+            operstate,
+            has_ipv4_global: ipv4,
+            has_ipv4_link_local: false,
+            has_ipv6_global: false,
+            has_ipv6_link_local: true,
+        }
+    }
 
     #[test]
     fn initial_kernel_snapshot_populates_resolver_links() {
@@ -87,5 +362,59 @@ mod tests {
             .kernel
             .as_ref()
             .is_some_and(|kernel| !kernel.ifname.is_empty())));
+    }
+
+    #[test]
+    fn changed_state_requires_two_stable_observations() {
+        let start = Instant::now();
+        let up = link(IFF_UP | IFF_RUNNING | IFF_LOWER_UP, IF_OPER_UP, true);
+        let down = link(0, 2, false);
+        let mut tracker = LinkTracker::default();
+        assert!(matches!(
+            tracker.observe(vec![up], start),
+            Decision::Publish { .. }
+        ));
+        assert!(matches!(
+            tracker.observe(vec![down.clone()], start + Duration::from_millis(1)),
+            Decision::ConfirmAfter(_)
+        ));
+        assert!(matches!(
+            tracker.observe(
+                vec![down],
+                start + RTNL_STATE_CONFIRMATION + Duration::from_millis(1),
+            ),
+            Decision::Publish { .. }
+        ));
+    }
+
+    #[test]
+    fn transient_down_state_does_not_replace_stable_link() {
+        let start = Instant::now();
+        let up = link(IFF_UP | IFF_RUNNING | IFF_LOWER_UP, IF_OPER_UP, true);
+        let down = link(0, 2, false);
+        let mut tracker = LinkTracker::default();
+        let _ = tracker.observe(vec![up.clone()], start);
+        assert!(matches!(
+            tracker.observe(vec![down], start + Duration::from_millis(1)),
+            Decision::ConfirmAfter(_)
+        ));
+        assert!(matches!(
+            tracker.observe(vec![up.clone()], start + Duration::from_millis(20)),
+            Decision::Unchanged
+        ));
+        assert_eq!(tracker.stable.get(&7), Some(&up));
+    }
+
+    #[test]
+    fn renewal_is_requested_only_after_carrier_returns_without_an_address() {
+        let down = link(0, 2, false);
+        let up_without_address = link(IFF_UP | IFF_RUNNING | IFF_LOWER_UP, IF_OPER_UP, false);
+        let up_with_address = link(IFF_UP | IFF_RUNNING | IFF_LOWER_UP, IF_OPER_UP, true);
+        assert!(renewal_transition(Some(&down), &up_without_address));
+        assert!(!renewal_transition(
+            Some(&up_without_address),
+            &up_without_address
+        ));
+        assert!(!renewal_transition(Some(&down), &up_with_address));
     }
 }

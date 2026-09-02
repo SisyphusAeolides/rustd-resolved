@@ -1,0 +1,10 @@
+schema=rustd-resolved-rtnl-stability-v1
+status=pass
+tested_base_sha=b2612e655327d576f79ca087b61f00710c1eec87
+raw_rtnetlink=pass
+debounced_reconciliation=pass
+two_sample_confirmation=pass
+socket_reopen=pass
+last_stable_state_retention=pass
+dhcp_renewal_coordination=pass
+link_flap_iterations=100
