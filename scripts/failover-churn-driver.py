@@ -109,6 +109,10 @@ def run(options: argparse.Namespace) -> int:
             root.chmod(0o755)
             config = root / "resolved.conf"
             runtime = root / "run"
+            network_links = root / "network-links"
+            hooks = root / "hooks"
+            network_links.mkdir()
+            hooks.mkdir()
             log = root / "resolver.log"
             config.write_text(
                 "[Resolve]\n"
@@ -127,6 +131,11 @@ def run(options: argparse.Namespace) -> int:
                     "RUSTD_RESOLVED_RUNTIME_ANCHOR_PATH": str(
                         root / "run" / "dnssec-trust-anchors.d" / "rustd-rfc5011.positive"
                     ),
+                    # Never watch the host's /run tree during a local campaign:
+                    # unrelated host events would request a resolver reload and
+                    # erase the last-good upstream state mid-failover.
+                    "RUSTD_NETWORK_LINKS_DIR": str(network_links),
+                    "RUSTD_RESOLVED_HOOK_PATH": str(hooks),
                 }
             )
 
