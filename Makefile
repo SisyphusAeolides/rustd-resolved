@@ -85,7 +85,7 @@ check-packaging:
 	! grep -Fq 'CAP_SYS_ADMIN' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'ExecStart=/usr/lib/rustd/rustd-resolved --dbus' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'Conflicts=systemd-resolved.service' packaging/rustd/rustd-resolved.service; \
-	grep -Fq 'ProtectSystem=false' packaging/rustd/rustd-resolved.service; \
+	grep -Fq 'ProtectSystem=strict' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'ReadWritePaths=/run/rustd /var/lib/rustd/resolved -/run/NetworkManager' packaging/rustd/rustd-resolved.service; \
 	grep -Fq 'd /var/lib/rustd/resolved 0750 rustd-resolve rustd-resolve -' packaging/tmpfiles/rustd-resolved.conf; \
 	grep -Fq 'drop_privileges("rustd-resolve", &config.runtime_directory)' src/main.rs; \
