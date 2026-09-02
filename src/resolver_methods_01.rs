@@ -40,6 +40,7 @@ impl Resolver {
             routing_generation: AtomicU64::new(1),
             inflight: Inflight::default(),
             chaos_optimizer: Mutex::new(ChaosOptimizer::default()),
+            last_successful: Mutex::new(HashMap::new()),
             hosts: RwLock::new(hosts),
             next_id: AtomicU16::new(1),
             counters: Counters::default(),
@@ -126,6 +127,10 @@ impl Resolver {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clear();
         self.tls_streams
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
+        self.last_successful
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clear();

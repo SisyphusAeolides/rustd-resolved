@@ -443,6 +443,11 @@ pub struct Resolver {
     inflight: Inflight,
     cache: Cache,
     chaos_optimizer: Mutex<ChaosOptimizer>,
+    /// Most recently successful server per logical identity.  A fresh query
+    /// starts with this path when it is healthy, then falls back to the
+    /// measured policy after a failure.  This preserves last-good failover
+    /// semantics without allowing a stale success to override cooldowns.
+    last_successful: Mutex<HashMap<ServerKey, Instant>>,
     hosts: RwLock<Hosts>,
     next_id: AtomicU16,
     counters: Counters,

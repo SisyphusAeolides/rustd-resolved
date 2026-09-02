@@ -17,6 +17,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
+      - name: Install native build dependencies
+        shell: 'bash --noprofile --norc -euo pipefail {0}'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential pkg-config libssl-dev liburing-dev python3
       - name: Update NSS packaging assertions
         shell: 'bash --noprofile --norc -euo pipefail {0}'
         run: |
@@ -38,8 +44,7 @@ jobs:
           make check-packaging
           git diff --check
           git fetch origin main
-          git rebase origin/main
-          rm -f .github/workflows/land-fedora-nss-cutover.yml
+          git rebase --autostash origin/main
           git add -A Makefile .github/workflows/final-release-closure.yml \
             packaging/nsswitch.conf.fragment tests/rustd_naming.rs \
             .github/workflows/land-fedora-nss-cutover.yml

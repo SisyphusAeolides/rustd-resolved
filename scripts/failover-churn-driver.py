@@ -116,6 +116,19 @@ def run(options: argparse.Namespace) -> int:
                 "FallbackDNS=\nDNSSEC=no\nDNSOverTLS=no\nLLMNR=no\nMulticastDNS=no\n",
                 encoding="utf-8",
             )
+            environment = os.environ.copy()
+            # Keep RFC5011 persistence and its generated trust-anchor file
+            # inside this disposable campaign root.  The live daemon normally
+            # uses /var/lib/rustd and /run; a test must never read or mutate
+            # those host paths (which may be root-owned).
+            environment.update(
+                {
+                    "RUSTD_RESOLVED_STATE_PATH": str(root / "state" / "rfc5011-trust-anchors.bin"),
+                    "RUSTD_RESOLVED_RUNTIME_ANCHOR_PATH": str(
+                        root / "run" / "dnssec-trust-anchors.d" / "rustd-rfc5011.positive"
+                    ),
+                }
+            )
 
             with log.open("w", encoding="utf-8") as output:
                 process = subprocess.Popen(
@@ -126,7 +139,7 @@ def run(options: argparse.Namespace) -> int:
                         "--runtime-directory", str(runtime),
                         "--workers", "2", "--no-varlink", "--no-dbus",
                     ],
-                    stdout=output, stderr=subprocess.STDOUT, text=True,
+                    stdout=output, stderr=subprocess.STDOUT, text=True, env=environment,
                 )
                 try:
                     warm_before_first = first.queries

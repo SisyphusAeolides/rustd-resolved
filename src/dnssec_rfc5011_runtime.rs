@@ -14,12 +14,14 @@ use anyhow::{Context, Result};
 use std::fs::{self, OpenOptions};
 use std::io::Write as _;
 use std::os::unix::fs::OpenOptionsExt as _;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::SystemTime;
 
 const DEFAULT_STATE_PATH: &str = "/var/lib/rustd/resolved/rfc5011-trust-anchors.bin";
 const DEFAULT_RUNTIME_ANCHOR_PATH: &str = "/run/dnssec-trust-anchors.d/rustd-rfc5011.positive";
+const STATE_PATH_ENV: &str = "RUSTD_RESOLVED_STATE_PATH";
+const RUNTIME_ANCHOR_PATH_ENV: &str = "RUSTD_RESOLVED_RUNTIME_ANCHOR_PATH";
 const DNSKEY_FLAG_REVOKE: u16 = 1 << 7;
 // Linux open(2) flags; keep the RFC5011 state publication dependency-free.
 const O_NOFOLLOW: i32 = 0o400000;
@@ -55,8 +57,24 @@ fn manager_for(path: &Path) -> Result<TrustAnchorManager> {
     Ok(manager)
 }
 
+fn configured_path(environment: &str, default: &'static str) -> PathBuf {
+    std::env::var_os(environment)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(default))
+}
+
+fn state_path() -> PathBuf {
+    configured_path(STATE_PATH_ENV, DEFAULT_STATE_PATH)
+}
+
+fn runtime_anchor_path() -> PathBuf {
+    configured_path(RUNTIME_ANCHOR_PATH_ENV, DEFAULT_RUNTIME_ANCHOR_PATH)
+}
+
 pub fn load_runtime_state() -> Result<RuntimeTrustState> {
-    load_runtime_state_from(Path::new(DEFAULT_STATE_PATH))
+    let path = state_path();
+    load_runtime_state_from(&path)
 }
 
 fn load_runtime_state_from(path: &Path) -> Result<RuntimeTrustState> {
@@ -100,10 +118,9 @@ fn runtime_state(manager: &TrustAnchorManager) -> RuntimeTrustState {
 /// point; an empty valid root set publishes a non-matching DS tombstone instead
 /// of silently resurrecting a revoked built-in anchor.
 pub fn publish_runtime_anchors() -> Result<()> {
-    publish_runtime_anchors_from(
-        Path::new(DEFAULT_STATE_PATH),
-        Path::new(DEFAULT_RUNTIME_ANCHOR_PATH),
-    )
+    let state = state_path();
+    let runtime = runtime_anchor_path();
+    publish_runtime_anchors_from(&state, &runtime)
 }
 
 fn publish_runtime_anchors_from(state_path: &Path, runtime_path: &Path) -> Result<()> {
@@ -197,9 +214,11 @@ pub fn observe_authenticated_dnskey_rrset(
     validating_keys: &[ResourceRecord],
     now: SystemTime,
 ) -> Result<bool> {
+    let state = state_path();
+    let runtime = runtime_anchor_path();
     observe_authenticated_dnskey_rrset_at(
-        Path::new(DEFAULT_STATE_PATH),
-        Path::new(DEFAULT_RUNTIME_ANCHOR_PATH),
+        &state,
+        &runtime,
         packet,
         dnskey_rrset,
         validating_keys,

@@ -254,7 +254,22 @@ impl Resolver {
             .iter()
             .map(|server| optimizer.selection_bias_ms(server.server()))
             .collect::<Vec<_>>();
-        choose_server_with_bias(&metrics, &biases).map(|index| servers[index])
+        let preferred = self
+            .last_successful
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .filter_map(|(server, success)| {
+                let index = servers.iter().position(|candidate| candidate == server)?;
+                let metric = &metrics[index];
+                if attempted.contains(server) || metric.failures != 0 || metric.cooldown_ms != 0 {
+                    return None;
+                }
+                Some((*success, index))
+            })
+            .max_by_key(|(success, _)| *success)
+            .map(|(_, index)| servers[index]);
+        preferred.or_else(|| choose_server_with_bias(&metrics, &biases).map(|index| servers[index]))
     }
 
     fn record_success(&self, server: ServerKey, duration: Duration) {
@@ -272,6 +287,10 @@ impl Resolver {
         );
         state.metric.failures = 0;
         state.cooldown_until = None;
+        self.last_successful
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(server, Instant::now());
     }
 
     fn record_failure(&self, server: ServerKey, duration: Duration) {

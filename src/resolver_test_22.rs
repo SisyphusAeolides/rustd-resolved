@@ -65,4 +65,21 @@ mod test_22_logical_server_identity {
         assert_ne!(first, second);
         assert_eq!(first.server(), second.server());
     }
+
+    #[test]
+    fn healthy_last_good_server_is_preferred_before_policy_exploration() {
+        let first = "192.0.2.53:53".parse().expect("first DNS server");
+        let second = "192.0.2.54:53".parse().expect("second DNS server");
+        let resolver = Resolver::new(Config {
+            upstreams: vec![first, second],
+            ..Config::default()
+        });
+        let keys = server_keys_for_specs(
+            ScopeKind::Global,
+            &resolver.server_specs_for_scope(ScopeKind::Global, &[first, second]),
+        );
+        resolver.record_success(keys[1], Duration::from_millis(2));
+
+        assert_eq!(resolver.select_server(&keys, &HashSet::new()), Some(keys[1]));
+    }
 }

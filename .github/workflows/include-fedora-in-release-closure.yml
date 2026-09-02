@@ -36,7 +36,6 @@ jobs:
           git diff --check
           git fetch origin main
           git rebase --autostash origin/main
-          rm -f .github/workflows/include-fedora-in-release-closure.yml
           git add -A .github/workflows/final-release-closure.yml .github/workflows/include-fedora-in-release-closure.yml
           git diff --cached --check
           git config user.name 'Kenny Glauner'
