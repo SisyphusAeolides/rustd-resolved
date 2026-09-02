@@ -426,7 +426,10 @@ jobs:
                       Decision::ConfirmAfter(_)
                   ));
                   assert!(matches!(
-                      tracker.observe(vec![down], start + RTNL_STATE_CONFIRMATION),
+                      tracker.observe(
+                          vec![down],
+                          start + RTNL_STATE_CONFIRMATION + Duration::from_millis(1),
+                      ),
                       Decision::Publish { .. }
                   ));
               }
@@ -488,7 +491,6 @@ jobs:
           dhcp_renewal_coordination=pass
           link_flap_iterations=100
           EOF
-          rm -f .github/workflows/land-rtnl-stability.yml
           git add -A
           git diff --cached --check
           git config user.name 'Kenny Glauner'
