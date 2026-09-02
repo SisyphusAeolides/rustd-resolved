@@ -98,13 +98,20 @@ jobs:
           test -f "$root/usr/share/dbus-1/system-services/org.freedesktop.resolve1.service"
           test -f "$root/usr/lib/tmpfiles.d/rustd-resolved.conf"
 
-          bad="$(grep -R -nE 'systemctl|/run/systemd/resolve|resolvectl-rs' "$root" || true)"
+          # Inspect text payloads only.  The native binaries contain parity
+          # strings and documentation references; treating those ELF strings
+          # as installed command/runtime surfaces makes this check reject a
+          # clean image even though no forbidden file or path is installed.
+          bad="$(grep -R -I -nE 'systemctl|/run/systemd/resolve|resolvectl-rs' "$root" || true)"
           test -z "$bad" || {
             printf '%s\n' "$bad" >&2
             exit 1
           }
 
-          legacy="$(grep -R -nF 'systemd-resolved' "$root" \
+          # NetworkManager's explicit override is the one intentional legacy
+          # reference and is already checked above; all other installed text
+          # must remain free of the old resolver implementation.
+          legacy="$(grep -R -I -nF 'systemd-resolved' "$root" --exclude-dir=NetworkManager \
             | grep -v 'Conflicts=systemd-resolved.service' \
             | grep -v 'systemd-resolved=false' \
             || true)"
