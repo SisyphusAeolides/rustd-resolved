@@ -491,7 +491,7 @@ jobs:
           rm -f .github/workflows/land-rtnl-stability.yml
           git add -A
           git diff --cached --check
-          git config user.name 'Kenny Glowner'
+          git config user.name 'Kenny Glauner'
           git config user.email 'SisyphusAeolides@pm.me'
           git commit -m 'Stabilize RTNL link tracking'
           git pull --rebase origin main
@@ -516,7 +516,7 @@ jobs:
           } > certification/rtnl-stability-diagnostic.txt
           git add certification/rtnl-stability-diagnostic.txt
           git diff --cached --check
-          git config user.name 'Kenny Glowner'
+          git config user.name 'Kenny Glauner'
           git config user.email 'SisyphusAeolides@pm.me'
           git commit -m 'Record RTNL stability diagnostic'
           git push origin HEAD:main

@@ -82,7 +82,7 @@ jobs:
           EOF
           git add certification/iouring-dns-safety-latest.txt
           if ! git diff --cached --quiet; then
-            git config user.name 'Kenny Glowner'
+            git config user.name 'Kenny Glauner'
             git config user.email 'SisyphusAeolides@pm.me'
             git commit -m 'Record io_uring DNS safety certification'
             bash scripts/push-certification-voucher.sh

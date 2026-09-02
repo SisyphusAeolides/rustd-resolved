@@ -67,7 +67,7 @@ jobs:
                   .github/workflows/final-ci-shell-hardening.yml
             git add -A .github/workflows scripts/check-ci-shell-safety.py
             git diff --cached --check
-            git config user.name 'Kenny Glowner'
+            git config user.name 'Kenny Glauner'
             git config user.email 'SisyphusAeolides@pm.me'
             git commit -m 'Enforce strict CI shell execution'
             git push origin HEAD:main
@@ -85,7 +85,7 @@ jobs:
             tail -n 200 /tmp/ci-shell-hardening.log || true
           } > certification/ci-shell-hardening-diagnostic.txt
           git add certification/ci-shell-hardening-diagnostic.txt
-          git config user.name 'Kenny Glowner'
+            git config user.name 'Kenny Glauner'
           git config user.email 'SisyphusAeolides@pm.me'
           git commit -m 'Record CI shell hardening diagnostic'
           git push origin HEAD:main

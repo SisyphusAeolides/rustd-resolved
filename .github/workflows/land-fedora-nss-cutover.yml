@@ -44,7 +44,7 @@ jobs:
             packaging/nsswitch.conf.fragment tests/rustd_naming.rs \
             .github/workflows/land-fedora-nss-cutover.yml
           git diff --cached --check
-          git config user.name 'Kenny Glowner'
+          git config user.name 'Kenny Glauner'
           git config user.email 'SisyphusAeolides@pm.me'
           git commit -m 'Make Fedora NSS cutover systemd-libs free'
           git push origin HEAD:main

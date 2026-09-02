@@ -53,7 +53,7 @@ jobs:
           rm -f .github/workflows/build-contract-hardening.yml
           git add build.rs .github/workflows/build-contract-hardening.yml
           git diff --cached --check
-          git config user.name 'Kenny Glowner'
+          git config user.name 'Kenny Glauner'
           git config user.email 'SisyphusAeolides@pm.me'
           git commit -m 'Track io_uring FFI header changes'
           git push origin HEAD:main

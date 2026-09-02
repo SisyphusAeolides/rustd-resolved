@@ -39,7 +39,7 @@ jobs:
           rm -f .github/workflows/include-fedora-in-release-closure.yml
           git add -A .github/workflows/final-release-closure.yml .github/workflows/include-fedora-in-release-closure.yml
           git diff --cached --check
-          git config user.name 'Kenny Glowner'
+          git config user.name 'Kenny Glauner'
           git config user.email 'SisyphusAeolides@pm.me'
           git commit -m 'Certify Fedora resolver packaging changes'
           git push origin HEAD:main

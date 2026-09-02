@@ -78,7 +78,7 @@ jobs:
           import urllib.request
 
           expected_login = "SisyphusAeolides"
-          expected_name = "Kenny Glowner"
+          expected_name = "Kenny Glauner"
           expected_email = "SisyphusAeolides@pm.me"
 
           if os.environ.get("GITHUB_ACTOR") != expected_login:
