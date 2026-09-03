@@ -1,7 +1,7 @@
 Source: rustd-resolved
 Section: net
 Priority: optional
-Maintainer: Kenny Glowner <sisyphusaeolides@users.noreply.github.com>
+Maintainer: Kenny Glauner <sisyphusaeolides@users.noreply.github.com>
 Build-Depends: debhelper-compat (= 13), cargo, rustc, pkg-config, libssl-dev, liburing-dev, gfortran
 Standards-Version: 4.6.0
 Homepage: https://github.com/SisyphusAeolides/rustd-resolved

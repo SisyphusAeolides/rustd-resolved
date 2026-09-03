@@ -112,17 +112,17 @@ make DESTDIR=%{buildroot} \
 * Wed Sep 02 2026 Kenny Glauner <SisyphusAeolides@pm.me> - 0.2.3-5
 - Keep the libc backend selection active during RPM installation rebuilds
 
-* Sun Aug 30 2026 Kenny Glowner <SisyphusAeolides@pm.me> - 0.2.3-4
+* Sun Aug 30 2026 Kenny Glauner <SisyphusAeolides@pm.me> - 0.2.3-4
 - Avoid CAP_FOWNER by chmodding the resolver runtime directory after ownership transition
 
-* Sun Aug 30 2026 Kenny Glowner <SisyphusAeolides@pm.me> - 0.2.3-3
+* Sun Aug 30 2026 Kenny Glauner <SisyphusAeolides@pm.me> - 0.2.3-3
 - Permit the resolver's bounded runtime-directory ownership transition
 
-* Sun Aug 30 2026 Kenny Glowner <SisyphusAeolides@pm.me> - 0.2.3-2
+* Sun Aug 30 2026 Kenny Glauner <SisyphusAeolides@pm.me> - 0.2.3-2
 - Allow the resolver's audited privilege transition to use CAP_SETPCAP
 - Require RustD system users before resolver activation
 
-* Tue Aug 18 2026 Kenny Glowner <SisyphusAeolides@pm.me> - 0.2.3-1
+* Tue Aug 18 2026 Kenny Glauner <SisyphusAeolides@pm.me> - 0.2.3-1
 - Complete license metadata for the staged NSS subpackage
 - Split the nonconflicting NSS module for fail-closed Fedora cutover staging
 - Add Fedora RustD-Resolved package with io_uring release regressions
