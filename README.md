@@ -5,9 +5,8 @@
 The resolver is built from Rust, C, Fortran, Idris, and Agda. It owns DNS stub service, upstream transports, cache, split-DNS routing, DNSSEC, DNS-over-TLS, LLMNR, mDNS, DNS-SD, NSS integration, lifecycle handling, and the RustD resolver control plane.
 
 In ArachOS, RustD-resolved is the native resolver managed by RustD on Arach
-Kernel. ArachOS owns the release, RPM repository, and installer composition;
-the bootstrap RPM/DNF package pool is used only where an existing package ABI
-is required. The integration is complete only after the native daemon, NSS
+Kernel. ArachOS owns the release, pacman repository, and ArchISO/Calamares
+installer composition. The integration is complete only after the native daemon, NSS
 module, Varlink, D-Bus, NetworkManager, DNSSEC, and DNS-over-TLS paths pass on
 the installed Arach-Kernel system; source tests alone do not certify that
 runtime.
@@ -19,8 +18,8 @@ cooldowns between 100 ms and 60 seconds. DNS correctness, validation, routing,
 and configured policy remain authoritative.
 
 > **Current status (2026-08-31):** the native resolver, packaging, NSS, and
-> compatibility-boundary gates are passing. The pinned RPM/DNF package build completed
-> `%check` with 543 tests passing, and the resulting package passed ArachOS
+> compatibility-boundary gates are passing. The pinned pacman package build
+> completed its test suite, and the resulting package passed ArachOS
 > candidate-repository validation. The bounded nonlinear server policy also
 > passes its determinism, limits, and policy-ordering tests. Final runtime
 > certification on Arach Kernel remains an open gate.
@@ -28,7 +27,7 @@ and configured policy remain authoritative.
 > **Production boundary:** this is not a claim that `rustd-resolved` is a 100%
 > certified, drop-in replacement for `systemd-resolved`. The paired ArachOS
 > installation still requires repeated installed-system VM validation
-> covering boot under RustD PID 1, resolver startup/restart, NSS and DNF name
+> covering boot under RustD PID 1, resolver startup/restart, NSS and pacman name
 > resolution, NetworkManager changes, DNSSEC/DNS-over-TLS policy, crash/fault
 > recovery, privilege boundaries, and long-running soak tests after the
 > `systemd*` package stack is removed. Keep a recovery path until that exact
@@ -143,12 +142,12 @@ The `org.freedesktop.resolve1` endpoint is such a boundary: it exists for third-
 
 The ArachOS release is a zero-systemd compatibility campaign together with the
 `rustd` repository. RustD pins an exact RustD-Resolved commit in
-`scripts/rustd-resolved-revision.txt`, and ArachOS RPM artifacts are built from
-that immutable source pair before disposable-VM conversion.
+`scripts/rustd-resolved-revision.txt`, and ArachOS packages are built from that
+immutable source pair before disposable-VM installation.
 
 The resolver side of a successful ArachOS certificate requires:
 
-- the `rustd-resolved` RPM to conflict with and replace the bootstrap resolver
+- the `rustd-resolved` package to conflict with and replace the bootstrap resolver
   package rather than coexisting as an untested second resolver;
 - `libnss_rustd_dns.so.2` to service the active authselect-generated hosts NSS
   path after removed NSS backends are deleted;
@@ -156,8 +155,8 @@ The resolver side of a successful ArachOS certificate requires:
   `/run/rustd/resolve`;
 - `rustd-resolved.service` to start under RustD PID 1 and remain active after
   repeated cold boots;
-- `getent` name resolution, `rustd-resolvectl status`, NetworkManager, and DNF
-  metadata refresh to continue working after every `systemd*` RPM has been
+- `getent` name resolution, `rustd-resolvectl status`, NetworkManager, and pacman
+  metadata refresh to continue working after every conflicting package has been
   removed;
 - no old resolver executable or runtime tree to survive in the certified
   filesystem or rebuilt initramfs.
