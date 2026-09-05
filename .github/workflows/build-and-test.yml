@@ -240,16 +240,18 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.idris2
-          key: idris2-v0.8.0-${{ runner.os }}-${{ runner.arch }}
+          key: idris2-v0.8.0-5aaefadb587224eb44d3be0fbb7e2835b48bd7a6-${{ runner.os }}-${{ runner.arch }}
 
       - name: Bootstrap pinned Idris 2
         if: ${{ steps.idris-cache.outputs.cache-hit != 'true' }}
         run: |
           set -euo pipefail
-          rm -rf /tmp/Idris2
-          git clone --depth 1 --branch v0.8.0 https://github.com/idris-lang/Idris2.git /tmp/Idris2
-          make -C /tmp/Idris2 bootstrap SCHEME=chezscheme PREFIX="$HOME/.idris2"
-          make -C /tmp/Idris2 install PREFIX="$HOME/.idris2"
+          idris_work=$(mktemp -d "$RUNNER_TEMP/idris2.XXXXXX")
+          trap 'find "$idris_work" -depth -delete' EXIT
+          git clone --filter=blob:none https://github.com/idris-lang/Idris2.git "$idris_work/src"
+          git -C "$idris_work/src" checkout --detach 5aaefadb587224eb44d3be0fbb7e2835b48bd7a6
+          make -C "$idris_work/src" bootstrap SCHEME=chezscheme PREFIX="$HOME/.idris2"
+          make -C "$idris_work/src" install PREFIX="$HOME/.idris2"
 
       - name: Verify pinned formal compilers
         run: |
