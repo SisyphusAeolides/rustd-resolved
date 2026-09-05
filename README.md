@@ -114,10 +114,10 @@ make check-formal
 bash scripts/build-reproducible-release.sh
 ```
 
-The formal Idris2 compiler is built from the pinned upstream Idris2 checkout;
-no distro or AUR Idris2 package is part of this project. Install Chez Scheme,
-Agda, and the normal build tools from the host distribution, then bootstrap
-the compiler from the official source before running the formal gate:
+The formal Idris2 compiler is built directly from the pinned upstream Idris2
+checkout. Install Chez Scheme, Agda, and the normal build tools from the host
+distribution, then bootstrap the compiler from the official source before
+running the formal gate:
 
 ```sh
 sudo pacman -S chez-scheme agda git base-devel
