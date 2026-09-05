@@ -121,7 +121,8 @@ the compiler from the official source before running the formal gate:
 
 ```sh
 sudo pacman -S chez-scheme agda git base-devel
-git clone --branch v0.8.0 https://github.com/idris-lang/Idris2.git "$HOME/src/Idris2"
+git clone --filter=blob:none https://github.com/idris-lang/Idris2.git "$HOME/src/Idris2"
+git -C "$HOME/src/Idris2" checkout --detach 5aaefadb587224eb44d3be0fbb7e2835b48bd7a6
 make -C "$HOME/src/Idris2" bootstrap SCHEME=chez PREFIX="$HOME/.local"
 make -C "$HOME/src/Idris2" install PREFIX="$HOME/.local"
 PATH="$HOME/.local/bin:$PATH" make check-formal
