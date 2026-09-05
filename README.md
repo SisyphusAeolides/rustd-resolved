@@ -114,6 +114,21 @@ make check-formal
 bash scripts/build-reproducible-release.sh
 ```
 
+The formal Idris2 compiler is built from the pinned upstream Idris2 checkout;
+no distro or AUR Idris2 package is part of this project. Install Chez Scheme,
+Agda, and the normal build tools from the host distribution, then bootstrap
+the compiler from the official source before running the formal gate:
+
+```sh
+sudo pacman -S chez-scheme agda git base-devel
+git clone --branch v0.8.0 https://github.com/idris-lang/Idris2.git "$HOME/src/Idris2"
+make -C "$HOME/src/Idris2" bootstrap SCHEME=chez PREFIX="$HOME/.local"
+make -C "$HOME/src/Idris2" install PREFIX="$HOME/.local"
+PATH="$HOME/.local/bin:$PATH" make check-formal
+```
+
+Set `IDRIS2` or `AGDA` when a tool is installed outside `PATH`.
+
 The production CI separately exercises Rust 1.74, current stable, native C/Fortran ABI, packaging, NSS, formatting, production and all-feature Clippy, the full test suite, repeated DNS regression tests, release builds, direct-root privilege drop, live native DNS/Varlink, live D-Bus interoperability, formal verification, restart-soak behavior, fuzz smoke tests, reproducible release builds, and native plus AArch64 release compilation with TLS, io_uring, and Fortran enabled.
 
 Reload coverage is part of the live contract. A SIGHUP re-reads configuration files while preserving launch-time environment and CLI overrides for listeners, proxy listeners, upstreams, runtime/Varlink paths, workers, ports, and stub-disable mode. The live D-Bus regression suite re-queries the deterministic upstream after HUP and rejects listener-rebind or configuration-publication permission failures after the daemon has dropped privileges.

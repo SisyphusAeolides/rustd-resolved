@@ -10,6 +10,8 @@ BINDIR ?= $(PREFIX)/bin
 LIBDIR ?= $(PREFIX)/lib
 SYSCONFDIR ?= /etc
 DATADIR ?= $(PREFIX)/share
+IDRIS2 ?= idris2
+AGDA ?= agda
 RUSTUP_TOOLCHAIN ?= 1.74.0
 export RUSTUP_TOOLCHAIN
 NSSWITCHDIR ?= $(DATADIR)/rustd-resolved
@@ -51,9 +53,7 @@ check-rust:
 	env -i PATH="$(PATH)" HOME="$(HOME)" CARGO_HOME="$(CARGO_HOME)" RUSTUP_HOME="$(RUSTUP_HOME)" RUSTUP_TOOLCHAIN="$(RUSTUP_TOOLCHAIN)" RUSTC_WRAPPER="$(RUSTC_WRAPPER)" CARGO_NET_OFFLINE="$(CARGO_NET_OFFLINE)" cargo test --all-targets --all-features --locked
 
 check-formal:
-	idris2 --build formal/idris/resolved-policy.ipkg
-	agda -i formal/agda formal/agda/Resolved/DNS/Name.agda
-	agda -i formal/agda formal/agda/Resolved/DNS/Transaction.agda
+	IDRIS2="$(IDRIS2)" AGDA="$(AGDA)" bash scripts/check-formal.sh
 
 check-packaging:
 	bash -n tests/direct-root-privilege-drop.sh tests/release_feature_boundary.sh tests/ops_runtime_contract.sh tests/dbus-introspection.sh scripts/boot-smoke.sh scripts/installed-certification.sh
